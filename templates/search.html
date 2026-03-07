@@ -138,9 +138,10 @@
                 {% endif %}
                 {% if result.published_at %}
                 <span class="published-date">
-                    {% if result.published_at %}
-                        {% set date = result.published_at %}
-                        {{ date[0:10] }}
+                    {% if 'ago' in result.published_at or 'month' in result.published_at or 'week' in result.published_at or 'day' in result.published_at or 'hour' in result.published_at %}
+                        {{ result.published_at }}
+                    {% else %}
+                        {{ result.published_at[0:10] }}
                     {% endif %}
                 </span>
                 {% endif %}
