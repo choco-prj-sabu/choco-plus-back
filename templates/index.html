@@ -42,10 +42,17 @@
         <script>
             document.getElementById('main-search-form').addEventListener('submit', function(e) {
                 e.preventDefault();
+                const query = document.querySelector('input[name="q"]').value.trim();
+                
+                if (!query) {
+                    alert('検索内容を入力してください');
+                    return false;
+                }
+                
                 const proxy = document.querySelector('input[name="proxy"]:checked').value;
                 const mode = document.querySelector('input[name="mode"]:checked').value;
                 const searchType = document.querySelector('input[name="search_type"]:checked').value;
-                const query = document.querySelector('input[name="q"]').value;
+                
                 document.cookie = 'proxy_type=' + proxy + '; max-age=2592000; path=/';
                 document.cookie = 'search_mode=' + mode + '; max-age=2592000; path=/';
                 document.cookie = 'search_type=' + searchType + '; max-age=2592000; path=/';
