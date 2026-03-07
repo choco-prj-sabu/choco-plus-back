@@ -60,6 +60,7 @@
         <select onchange="window.location.href='/trend?region={{ region }}&proxy=' + this.value">
             <option value="img.youtube.com" {{ 'selected' if proxy_type == 'img.youtube.com' }}>img.youtube.com</option>
             <option value="i.ytimg.com" {{ 'selected' if proxy_type == 'i.ytimg.com' }}>i.ytimg.com</option>
+            <option value="self-hosted" {{ 'selected' if proxy_type == 'self-hosted' }}>自サーバー (Self-hosted)</option>
         </select>
     </div>
 </div>
