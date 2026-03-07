@@ -1,14 +1,20 @@
 {% extends "base.html" %}
 
-{% block title %}トレンド - Choco-Tube{% endblock %}
+{% block title %}トレンド - Choco-Tube-Plus{% endblock %}
 
 {% block extra_head %}
 <style>
+    .trend-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 20px;
+        flex-wrap: wrap;
+        gap: 20px;
+    }
     .region-selector {
         display: flex;
-        justify-content: center;
         gap: 10px;
-        margin-bottom: 20px;
         flex-wrap: wrap;
     }
     .region-selector a {
@@ -20,27 +26,50 @@
         font-size: 0.9rem;
     }
     .region-selector a.active {
-        background: #ff0000;
+        background: #6a4c93;
         color: #fff;
-        border-color: #ff0000;
+        border-color: #6a4c93;
+    }
+    .proxy-selector {
+        font-size: 0.9rem;
+        color: #aaa;
+    }
+    .proxy-selector select {
+        background: #2a2a2a;
+        color: #fff;
+        border: 1px solid #444;
+        padding: 5px;
+        border-radius: 5px;
     }
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="region-selector">
-    <a href="/trend?region=JP" class="{{ 'active' if region == 'JP' }}">日本</a>
-    <a href="/trend?region=US" class="{{ 'active' if region == 'US' }}">アメリカ</a>
-    <a href="/trend?region=GB" class="{{ 'active' if region == 'GB' }}">イギリス</a>
-    <a href="/trend?region=KR" class="{{ 'active' if region == 'KR' }}">韓国</a>
-    <a href="/trend?region=DE" class="{{ 'active' if region == 'DE' }}">ドイツ</a>
-    <a href="/trend?region=FR" class="{{ 'active' if region == 'FR' }}">フランス</a>
+<div class="trend-header">
+    <div class="region-selector">
+        <a href="/trend?region=JP&proxy={{ proxy_type }}" class="{{ 'active' if region == 'JP' }}">日本</a>
+        <a href="/trend?region=US&proxy={{ proxy_type }}" class="{{ 'active' if region == 'US' }}">アメリカ</a>
+        <a href="/trend?region=GB&proxy={{ proxy_type }}" class="{{ 'active' if region == 'GB' }}">イギリス</a>
+        <a href="/trend?region=KR&proxy={{ proxy_type }}" class="{{ 'active' if region == 'KR' }}">韓国</a>
+        <a href="/trend?region=DE&proxy={{ proxy_type }}" class="{{ 'active' if region == 'DE' }}">ドイツ</a>
+        <a href="/trend?region=FR&proxy={{ proxy_type }}" class="{{ 'active' if region == 'FR' }}">フランス</a>
+    </div>
+    
+    <div class="proxy-selector">
+        サムネイル:
+        <select onchange="window.location.href='/trend?region={{ region }}&proxy=' + this.value">
+            <option value="img.youtube.com" {{ 'selected' if proxy_type == 'img.youtube.com' }}>img.youtube.com</option>
+            <option value="i.ytimg.com" {{ 'selected' if proxy_type == 'i.ytimg.com' }}>i.ytimg.com</option>
+        </select>
+    </div>
 </div>
 
 <div class="video-grid">
     {% for video in results %}
     <a href="/watch/{{ video.id }}" class="video-card">
-        <img src="{{ video.thumbnail }}" alt="{{ video.title }}" loading="lazy">
+        <div class="thumbnail-container">
+            <img src="{{ video.thumbnail }}" alt="{{ video.title }}" loading="lazy">
+        </div>
         <div class="video-info">
             <h3>{{ video.title }}</h3>
             <p>{{ video.channel }}</p>
