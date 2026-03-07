@@ -170,15 +170,25 @@ def get_japan_trend_by_category(category='all', proxy_type='self-hosted'):
         response = requests.get(url, timeout=5)
         if response.status_code == 200:
             data = response.json()
-            # "trending"キーが存在する場合はそれを使用、なければデータ全体を使用
-            trending_list = data.get('trending', data) if isinstance(data, dict) else data
+            
+            # カテゴリ別に対応するキーを決定
+            if category == 'all':
+                # wakameリポジトリの場合は'trending'キーを使用
+                trending_list = data.get('trending', data) if isinstance(data, dict) else data
+            elif category == 'game':
+                # ajgpwリポジトリのgamingキーを使用
+                trending_list = data.get('gaming', [])
+            elif category == 'music':
+                # ajgpwリポジトリのmusicキーを使用
+                trending_list = data.get('music', [])
+            else:
+                # デフォルト
+                trending_list = data.get('trending', data) if isinstance(data, dict) else data
             
             for item in trending_list:
                 v_id = item.get('id') or item.get('videoId')
                 if not v_id: continue
                 
-                # カテゴリがgameまたはmusicの場合、フィルタリング
-                # （簡易的な実装: jsonに適切なカテゴリ情報がない場合は全て表示）
                 results.append({
                     'id': v_id,
                     'title': item.get('title') or 'No Title',
