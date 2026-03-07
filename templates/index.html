@@ -25,40 +25,21 @@
             <div style="text-align: left; margin-bottom: 25px;">
                 <p style="margin: 0 0 12px 0; font-size: 1rem; color: #fff; font-weight: 600;">検索モード:</p>
                 <div style="display: flex; gap: 20px; font-size: 1rem; color: #aaa;">
-                    <label style="cursor: pointer;"><input type="radio" name="mode" value="inv_first" checked> Invidious優先</label>
-                    <label style="cursor: pointer;"><input type="radio" name="mode" value="yt_first"> YouTube API優先</label>
+                    <label style="cursor: pointer;"><input type="radio" name="search_mode" value="inv_first" checked> Invidious優先</label>
+                    <label style="cursor: pointer;"><input type="radio" name="search_mode" value="yt_first"> YouTube API優先</label>
                 </div>
             </div>
 
             <div style="text-align: left;">
                 <p style="margin: 0 0 12px 0; font-size: 1rem; color: #fff; font-weight: 600;">サムネイルプロキシ:</p>
                 <div style="display: flex; gap: 20px; flex-wrap: wrap; font-size: 1rem; color: #aaa;">
-                    <label style="cursor: pointer;"><input type="radio" name="proxy" value="self-hosted" checked> 自サーバー</label>
-                    <label style="cursor: pointer;"><input type="radio" name="proxy" value="img.youtube.com"> img.youtube.com</label>
-                    <label style="cursor: pointer;"><input type="radio" name="proxy" value="i.ytimg.com"> i.ytimg.com</label>
+                    <label style="cursor: pointer;"><input type="radio" name="proxy_type" value="self-hosted" checked> 自サーバー</label>
+                    <label style="cursor: pointer;"><input type="radio" name="proxy_type" value="img.youtube.com"> img.youtube.com</label>
+                    <label style="cursor: pointer;"><input type="radio" name="proxy_type" value="i.ytimg.com"> i.ytimg.com</label>
                 </div>
             </div>
         </form>
         <script>
-            document.getElementById('main-search-form').addEventListener('submit', function(e) {
-                e.preventDefault();
-                const query = document.querySelector('input[name="q"]').value.trim();
-                
-                if (!query) {
-                    alert('検索内容を入力してください');
-                    return false;
-                }
-                
-                const proxy = document.querySelector('input[name="proxy"]:checked').value;
-                const mode = document.querySelector('input[name="mode"]:checked').value;
-                const searchType = document.querySelector('input[name="search_type"]:checked').value;
-                
-                document.cookie = 'proxy_type=' + proxy + '; max-age=2592000; path=/';
-                document.cookie = 'search_mode=' + mode + '; max-age=2592000; path=/';
-                document.cookie = 'search_type=' + searchType + '; max-age=2592000; path=/';
-                window.location.href = '/search?q=' + encodeURIComponent(query);
-            });
-            
             document.addEventListener('DOMContentLoaded', function() {
                 const proxyCookie = document.cookie.split('; ').find(row => row.startsWith('proxy_type='));
                 const modeCookie = document.cookie.split('; ').find(row => row.startsWith('search_mode='));
@@ -66,7 +47,7 @@
                 
                 if (proxyCookie) {
                     const proxyValue = proxyCookie.split('=')[1];
-                    const proxyRadios = document.querySelectorAll('input[name="proxy"]');
+                    const proxyRadios = document.querySelectorAll('input[name="proxy_type"]');
                     proxyRadios.forEach(radio => {
                         if (radio.value === proxyValue) radio.checked = true;
                     });
@@ -74,7 +55,7 @@
                 
                 if (modeCookie) {
                     const modeValue = modeCookie.split('=')[1];
-                    const modeRadios = document.querySelectorAll('input[name="mode"]');
+                    const modeRadios = document.querySelectorAll('input[name="search_mode"]');
                     modeRadios.forEach(radio => {
                         if (radio.value === modeValue) radio.checked = true;
                     });
@@ -87,6 +68,21 @@
                         if (radio.value === searchTypeValue) radio.checked = true;
                     });
                 }
+                
+                document.getElementById('main-search-form').addEventListener('submit', function(e) {
+                    const query = document.querySelector('input[name="q"]').value.trim();
+                    if (!query) {
+                        e.preventDefault();
+                        alert('検索内容を入力してください');
+                        return false;
+                    }
+                    const proxy = document.querySelector('input[name="proxy_type"]:checked').value;
+                    const mode = document.querySelector('input[name="search_mode"]:checked').value;
+                    const searchType = document.querySelector('input[name="search_type"]:checked').value;
+                    document.cookie = 'proxy_type=' + proxy + '; max-age=2592000; path=/';
+                    document.cookie = 'search_mode=' + mode + '; max-age=2592000; path=/';
+                    document.cookie = 'search_type=' + searchType + '; max-age=2592000; path=/';
+                });
             });
         </script>
     </div>
