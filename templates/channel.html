@@ -374,7 +374,7 @@
             {% endfor %}
         </div>
         <div class="load-more-container" id="load-more-container">
-            <button class="load-more-btn hidden" id="load-more-btn">もっと読み込む</button>
+            <button class="load-more-btn" id="load-more-btn">もっと読み込む</button>
             <div class="loading-spinner hidden" id="loading-spinner">
                 <span>読み込み中...</span>
             </div>
@@ -404,6 +404,12 @@
                 </div>
             </a>
             {% endfor %}
+        </div>
+        <div class="load-more-container" id="load-more-shorts-container">
+            <button class="load-more-btn" id="load-more-shorts-btn">もっと読み込む</button>
+            <div class="loading-spinner hidden" id="loading-spinner-shorts">
+                <span>読み込み中...</span>
+            </div>
         </div>
     </div>
     {% endif %}
@@ -450,6 +456,10 @@
 </div>
 
 <script>
+    let videosOffset = {{ videos|length }};
+    let shortsOffset = {{ shorts|length }};
+    const channelId = window.location.pathname.split('/').pop();
+    
     document.addEventListener('DOMContentLoaded', function() {
         const tabs = document.querySelectorAll('.channel-tab');
         tabs.forEach(tab => {
@@ -466,6 +476,88 @@
                 document.getElementById('tab-' + tabName).classList.remove('hidden');
             });
         });
+        
+        const loadMoreBtn = document.getElementById('load-more-btn');
+        const loadMoreShortsBtn = document.getElementById('load-more-shorts-btn');
+        const loadingSpinner = document.getElementById('loading-spinner');
+        const loadingSpinnerShorts = document.getElementById('loading-spinner-shorts');
+        const videoGrid = document.getElementById('video-grid');
+        const shortsGrid = document.getElementById('shorts-grid');
+        
+        if (loadMoreBtn) {
+            loadMoreBtn.addEventListener('click', function() {
+                loadMoreVideos('videos');
+            });
+        }
+        
+        if (loadMoreShortsBtn) {
+            loadMoreShortsBtn.addEventListener('click', function() {
+                loadMoreVideos('shorts');
+            });
+        }
     });
+    
+    function loadMoreVideos(type) {
+        const loadMoreBtn = type === 'videos' ? document.getElementById('load-more-btn') : document.getElementById('load-more-shorts-btn');
+        const loadingSpinner = type === 'videos' ? document.getElementById('loading-spinner') : document.getElementById('loading-spinner-shorts');
+        const grid = type === 'videos' ? document.getElementById('video-grid') : document.getElementById('shorts-grid');
+        const offset = type === 'videos' ? videosOffset : shortsOffset;
+        
+        loadMoreBtn.classList.add('hidden');
+        loadingSpinner.classList.remove('hidden');
+        
+        fetch(`/api/channel/${channelId}/more?type=${type}&offset=${offset}`)
+            .then(res => res.json())
+            .then(data => {
+                const videos = data.videos || [];
+                videos.forEach(video => {
+                    const card = document.createElement('a');
+                    card.href = '/watch/' + video.id;
+                    card.className = 'video-card dynamic-video-link';
+                    card.setAttribute('data-video-id', video.id);
+                    
+                    let durationHTML = '';
+                    if (video.length) {
+                        durationHTML = `<span class="video-duration">${video.length}</span>`;
+                    }
+                    
+                    card.innerHTML = `
+                        <div class="thumbnail-container">
+                            <img src="/api/thumbnail/${video.id}" alt="${video.title}" class="thumbnail" loading="lazy">
+                            ${durationHTML}
+                        </div>
+                        <div class="video-info">
+                            <h3 class="video-title">${video.title}</h3>
+                            <p class="video-meta">
+                                <span>${video.views}</span>
+                                ${video.published ? `<span class="separator">•</span><span>${video.published}</span>` : ''}
+                            </p>
+                        </div>
+                    `;
+                    grid.appendChild(card);
+                });
+                
+                if (type === 'videos') {
+                    videosOffset += videos.length;
+                } else {
+                    shortsOffset += videos.length;
+                }
+                
+                if (videos.length > 0) {
+                    loadMoreBtn.classList.remove('hidden');
+                } else {
+                    loadMoreBtn.innerHTML = 'すべて読み込みました';
+                    loadMoreBtn.disabled = true;
+                }
+                
+                loadingSpinner.classList.add('hidden');
+            })
+            .catch(err => {
+                console.error('Error loading more videos:', err);
+                loadMoreBtn.classList.remove('hidden');
+                loadMoreBtn.innerHTML = 'エラー: 再試行';
+                loadingSpinner.classList.add('hidden');
+            });
+    }
 </script>
 {% endblock %}
