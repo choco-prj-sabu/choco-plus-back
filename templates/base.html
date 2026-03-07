@@ -75,6 +75,43 @@
         }
         .search-form button:hover { background: #555; }
         
+        .search-container {
+            position: relative;
+        }
+        
+        #suggestions-list {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            background: #2a2a2a;
+            border: 1px solid #444;
+            border-top: none;
+            border-radius: 0 0 10px 10px;
+            max-height: 200px;
+            overflow-y: auto;
+            display: none;
+            z-index: 1001;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+        }
+        
+        .suggestion-item {
+            padding: 10px 20px;
+            color: #ccc;
+            cursor: pointer;
+            border-bottom: 1px solid #333;
+            font-size: 0.9rem;
+        }
+        
+        .suggestion-item:last-child {
+            border-bottom: none;
+        }
+        
+        .suggestion-item:hover {
+            background: #383838;
+            color: #fff;
+        }
+        
         main {
             padding: 20px;
             max-width: 1400px;
@@ -174,10 +211,10 @@
         <a href="/" class="logo">Choco<span>-Tube-Plus</span></a>
         <div class="search-container">
             <form action="/search" method="get" class="search-form">
-                <input type="text" name="q" placeholder="検索" value="{{ query if query else '' }}" required>
-                <input type="hidden" name="proxy" value="{{ proxy_type if proxy_type else 'img.youtube.com' }}">
+                <input type="text" id="search-input" name="q" placeholder="検索" value="{{ query if query else '' }}" required>
                 <button type="submit">検索</button>
             </form>
+            <div id="suggestions-list"></div>
         </div>
         <div style="width: 40px;"></div>
     </header>
@@ -219,6 +256,7 @@
             }
         });
     </script>
+    <script src="/static/js/autocomplete.js"></script>
     {% block extra_scripts %}{% endblock %}
 </body>
 </html>
