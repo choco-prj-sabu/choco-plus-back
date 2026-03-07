@@ -328,88 +328,88 @@ def channel(channel_id):
     channel_source = None
     videos = []
     
-    # Try YouTube API first
-    for key in YOUTUBE_API_KEYS:
-        try:
-            url = f"https://www.googleapis.com/youtube/v3/channels?part=snippet,statistics&id={channel_id}&key={key}"
-            response = requests.get(url, timeout=5)
-            if response.status_code == 200:
-                data = response.json()
-                if data.get('items'):
-                    channel_data = data['items'][0]
-                    channel_source = 'youtube'
-                    break
-        except Exception as e:
-            print(f"Error fetching channel info: {e}")
-            continue
-    
-    # Fallback to Invidious if YouTube API fails
-    if not channel_data:
-        instances = INVIDIOUS_INSTANCES.copy()
-        random.shuffle(instances)
-        for instance in instances:
+    try:
+        # Try YouTube API first
+        for key in YOUTUBE_API_KEYS:
             try:
-                url = f"{instance}/api/v1/channels/{channel_id}"
-                response = requests.get(url, timeout=5)
-                if response.status_code == 200:
-                    channel_data = response.json()
-                    channel_source = 'invidious'
-                    break
-            except Exception as e:
-                print(f"Invidious channel error: {e}")
-                continue
-    
-    # Fetch videos
-    for key in YOUTUBE_API_KEYS:
-        try:
-            url = f"https://www.googleapis.com/youtube/v3/search?part=snippet&channelId={channel_id}&type=video&maxResults=20&key={key}"
-            response = requests.get(url, timeout=5)
-            if response.status_code == 200:
-                data = response.json()
-                for item in data.get('items', []):
-                    v_id = item['id']['videoId']
-                    videos.append({
-                        'id': v_id,
-                        'title': item['snippet']['title'],
-                        'thumbnail': get_proxy_thumbnail(v_id, proxy_type)
-                    })
-                break
-        except Exception as e:
-            print(f"Error fetching channel videos: {e}")
-            continue
-    
-    # If YouTube API videos fetch failed, try Invidious
-    if not videos and channel_source:
-        instances = INVIDIOUS_INSTANCES.copy()
-        random.shuffle(instances)
-        for instance in instances:
-            try:
-                url = f"{instance}/api/v1/channels/{channel_id}/latest"
+                url = f"https://www.googleapis.com/youtube/v3/channels?part=snippet,statistics&id={channel_id}&key={key}"
                 response = requests.get(url, timeout=5)
                 if response.status_code == 200:
                     data = response.json()
-                    for item in data:
-                        v_id = item.get('videoId')
-                        if v_id:
-                            videos.append({
-                                'id': v_id,
-                                'title': item.get('title', 'Unknown'),
-                                'thumbnail': get_proxy_thumbnail(v_id, proxy_type)
-                            })
+                    if data.get('items'):
+                        channel_data = data['items'][0]
+                        channel_source = 'youtube'
+                        break
+            except Exception as e:
+                print(f"Error fetching channel info: {e}")
+                continue
+        
+        # Fallback to Invidious if YouTube API fails
+        if not channel_data:
+            instances = INVIDIOUS_INSTANCES.copy()
+            random.shuffle(instances)
+            for instance in instances:
+                try:
+                    url = f"{instance}/api/v1/channels/{channel_id}"
+                    response = requests.get(url, timeout=5)
+                    if response.status_code == 200:
+                        channel_data = response.json()
+                        channel_source = 'invidious'
+                        break
+                except Exception as e:
+                    print(f"Invidious channel error: {e}")
+                    continue
+        
+        # Fetch videos
+        for key in YOUTUBE_API_KEYS:
+            try:
+                url = f"https://www.googleapis.com/youtube/v3/search?part=snippet&channelId={channel_id}&type=video&maxResults=20&key={key}"
+                response = requests.get(url, timeout=5)
+                if response.status_code == 200:
+                    data = response.json()
+                    for item in data.get('items', []):
+                        v_id = item['id']['videoId']
+                        videos.append({
+                            'id': v_id,
+                            'title': item['snippet']['title'],
+                            'thumbnail': get_proxy_thumbnail(v_id, proxy_type)
+                        })
                     break
             except Exception as e:
-                print(f"Invidious videos error: {e}")
+                print(f"Error fetching channel videos: {e}")
                 continue
-    
-    channel_name = "Unknown"
-    subscriber_count = None
-    video_count = None
-    view_count = None
-    description = None
-    channel_image = None
-    
-    if channel_data:
-        try:
+        
+        # If YouTube API videos fetch failed, try Invidious
+        if not videos and channel_source:
+            instances = INVIDIOUS_INSTANCES.copy()
+            random.shuffle(instances)
+            for instance in instances:
+                try:
+                    url = f"{instance}/api/v1/channels/{channel_id}/latest"
+                    response = requests.get(url, timeout=5)
+                    if response.status_code == 200:
+                        data = response.json()
+                        for item in data:
+                            v_id = item.get('videoId')
+                            if v_id:
+                                videos.append({
+                                    'id': v_id,
+                                    'title': item.get('title', 'Unknown'),
+                                    'thumbnail': get_proxy_thumbnail(v_id, proxy_type)
+                                })
+                        break
+                except Exception as e:
+                    print(f"Invidious videos error: {e}")
+                    continue
+        
+        channel_name = "Unknown"
+        subscriber_count = None
+        video_count = None
+        view_count = None
+        description = None
+        channel_image = None
+        
+        if channel_data:
             if channel_source == 'youtube':
                 if 'snippet' in channel_data:
                     channel_name = channel_data['snippet'].get('title', 'Unknown')
@@ -463,8 +463,15 @@ def channel(channel_id):
                 vid_count = channel_data.get('videoCount')
                 if vid_count:
                     video_count = f"{int(vid_count):,}"
-        except Exception as e:
-            print(f"Error parsing channel data: {e}")
+    
+    except Exception as e:
+        print(f"Unexpected error in channel route: {e}")
+        channel_name = "Unknown"
+        subscriber_count = None
+        video_count = None
+        view_count = None
+        description = None
+        channel_image = None
     
     return render_template('channel.html', 
                           channel_name=channel_name,
