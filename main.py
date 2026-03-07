@@ -76,8 +76,10 @@ def search_youtube(query, page_token=None, proxy_type="img.youtube.com"):
                         'channel': item['snippet']['channelTitle']
                     })
                 return results, data.get('nextPageToken')
-        except:
+        except Exception as e:
+            print(f"YouTube API error with key {key[:10]}...: {e}")
             continue
+    print(f"All YouTube API keys failed for query: {query}")
     return None, None
 
 def search_invidious(query, page=1, proxy_type="img.youtube.com"):
@@ -99,73 +101,11 @@ def search_invidious(query, page=1, proxy_type="img.youtube.com"):
                         'channel': item['author']
                     })
                 return results, page + 1
-        except:
-            continue
-    return None, None
-
-@app.route('/api/suggestions')
-def suggestions():
-    """検索候補を返すAPI（Invidious優先）"""
-    query = request.args.get('q', '').strip()
-    if not query or len(query) < 2:
-        return jsonify([])
-    
-    suggestions_list = []
-    
-    # 1. Invidious API を優先的に試す
-    instances = INVIDIOUS_INSTANCES.copy()
-    random.shuffle(instances)
-    
-    for instance in instances:
-        try:
-            url = f"{instance}/api/v1/search?q={query}&type=video"
-            response = requests.get(url, timeout=(2, 3), headers={'User-Agent': 'Mozilla/5.0'})
-            if response.status_code == 200:
-                data = response.json()
-                if isinstance(data, list):
-                    for item in data[:10]:
-                        title = item.get('title', '')
-                        if title and title not in suggestions_list:
-                            suggestions_list.append(title)
-                    if len(suggestions_list) >= 5:  # 5個以上取得できたら返す
-                        print(f"Suggestions from Invidious {instance}: {len(suggestions_list)} items")
-                        return jsonify(suggestions_list[:10])
         except Exception as e:
             print(f"Invidious error {instance}: {e}")
             continue
-    
-    # 2. YouTube API にフォールバック（Invidiousで不足した場合）
-    if len(suggestions_list) < 5:
-        for key in YOUTUBE_API_KEYS:
-            try:
-                url = f"https://www.googleapis.com/youtube/v3/search?part=snippet&q={query}&type=video&maxResults=10&key={key}"
-                response = requests.get(url, timeout=(2, 3))
-                if response.status_code == 200:
-                    data = response.json()
-                    if 'error' not in data and 'items' in data:
-                        for item in data.get('items', []):
-                            title = item['snippet']['title']
-                            if title and title not in suggestions_list:
-                                suggestions_list.append(title)
-                            if len(suggestions_list) >= 10:
-                                break
-                        if suggestions_list:
-                            print(f"Suggestions from YouTube API: {len(suggestions_list)} items")
-                            return jsonify(suggestions_list[:10])
-                elif response.status_code == 403:
-                    # API key quota exceeded, try next key
-                    continue
-            except Exception as e:
-                print(f"YouTube API error with key {key[:10]}...: {e}")
-                continue
-    
-    # 3. 何か候補があれば返す、なければクエリそのものを返す
-    if suggestions_list:
-        print(f"Returning {len(suggestions_list)} suggestions")
-        return jsonify(suggestions_list[:10])
-    
-    print(f"No suggestions found, returning query: {query}")
-    return jsonify([query])
+    print(f"All Invidious instances failed for query: {query}")
+    return None, None
 
 @app.route('/')
 def index():
