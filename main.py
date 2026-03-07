@@ -121,7 +121,7 @@ def search():
     mode = request.args.get('mode', request.cookies.get('search_mode', 'inv_first'))
     page = request.args.get('page', 1, type=int)
     token = request.args.get('token', None)
-    proxy_type = request.args.get('proxy', request.cookies.get('proxy_type', 'self-hosted'))
+    proxy_type = request.cookies.get('proxy_type', 'self-hosted')
     
     if not query:
         response = make_response(render_template('search.html', results=[], query="", proxy_type=proxy_type, mode=mode))
