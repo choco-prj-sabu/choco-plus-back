@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ query }} - Choco-Tube-Plus</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #0f0f0f; color: #fff; margin: 0; }
+        header { display: flex; align-items: center; padding: 10px 20px; background: #0f0f0f; position: sticky; top: 0; z-index: 100; border-bottom: 1px solid #333; }
+        .logo { font-size: 1.5rem; font-weight: bold; color: #ff0000; text-decoration: none; margin-right: 20px; }
+        .logo span { color: #fff; }
+        .search-box { flex: 1; max-width: 600px; display: flex; border: 1px solid #333; border-radius: 40px; overflow: hidden; background: #121212; }
+        input[type="text"] { flex: 1; border: none; background: transparent; color: #fff; padding: 8px 15px; outline: none; }
+        .video-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; padding: 20px; }
+        .video-card { background: #1e1e1e; border-radius: 12px; overflow: hidden; transition: transform 0.2s; text-decoration: none; color: inherit; }
+        .video-card:hover { transform: scale(1.03); background: #2a2a2a; }
+        .video-card img { width: 100%; aspect-ratio: 16/9; object-fit: cover; }
+        .info { padding: 12px; }
+        .info h3 { margin: 0 0 8px 0; font-size: 0.95rem; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+        .info p { margin: 0; font-size: 0.8rem; color: #aaa; }
+    </style>
+</head>
+<body>
+    <header>
+        <a href="/" class="logo">Choco-Tube<span>+</span></a>
+        <form action="/search" method="get" style="flex:1; display:flex; align-items:center;">
+            <div class="search-box">
+                <input type="text" name="q" value="{{ query }}" required>
+                <input type="hidden" name="mode" value="{{ mode }}">
+                <button type="submit" style="background:#333; border:none; color:#fff; padding:0 15px; cursor:pointer;">検索</button>
+            </div>
+        </form>
+    </header>
+    <main>
+        <div class="video-grid">
+            {% for video in results %}
+            <a href="/watch/{{ video.id }}" class="video-card">
+                <img src="{{ video.thumbnail }}" alt="{{ video.title }}">
+                <div class="info">
+                    <h3>{{ video.title }}</h3>
+                    <p>{{ video.channel }}</p>
+                </div>
+            </a>
+            {% else %}
+            <div style="grid-column: 1/-1; text-align: center; padding: 50px;">
+                <p>動画が見つかりませんでした。</p>
+            </div>
+            {% endfor %}
+        </div>
+    </main>
+</body>
+</html>
