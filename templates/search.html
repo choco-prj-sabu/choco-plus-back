@@ -132,6 +132,19 @@
         <div class="video-info">
             <h3>{{ result.title }}</h3>
             <p>{{ result.channel }}</p>
+            <div class="video-meta">
+                {% if result.views %}
+                <span class="view-count">視聴数: {{ result.views }}</span>
+                {% endif %}
+                {% if result.published_at %}
+                <span class="published-date">
+                    {% if result.published_at %}
+                        {% set date = result.published_at %}
+                        {{ date[0:10] }}
+                    {% endif %}
+                </span>
+                {% endif %}
+            </div>
         </div>
     </a>
     {% endfor %}
