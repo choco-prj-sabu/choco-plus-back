@@ -106,10 +106,18 @@ function setTrendCookie(name, value) {
     <a href="/watch/{{ video.id }}" class="video-card">
         <div class="thumbnail-container">
             <img src="{{ video.thumbnail }}" alt="{{ video.title }}" loading="lazy">
+            {% if video.duration %}
+            <span class="video-duration">{{ video.duration }}</span>
+            {% endif %}
         </div>
         <div class="video-info">
             <h3>{{ video.title }}</h3>
             <p>{{ video.channel }}</p>
+            {% if video.views %}
+            <div class="video-meta">
+                <span class="view-count">視聴数: {{ video.views }}</span>
+            </div>
+            {% endif %}
         </div>
     </a>
     {% endfor %}
