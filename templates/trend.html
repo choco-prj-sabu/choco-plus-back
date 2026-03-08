@@ -113,11 +113,14 @@ function setTrendCookie(name, value) {
         <div class="video-info">
             <h3>{{ video.title }}</h3>
             <p>{{ video.channel }}</p>
-            {% if video.views %}
             <div class="video-meta">
+                {% if video.views %}
                 <span class="view-count">視聴数: {{ video.views }}</span>
+                {% endif %}
+                {% if video.published_at %}
+                <span class="published-date">{{ video.published_at|format_relative_date }}</span>
+                {% endif %}
             </div>
-            {% endif %}
         </div>
     </a>
     {% endfor %}
