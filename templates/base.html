@@ -21,11 +21,12 @@
     
     <script>
         document.getElementById('header-search-form').addEventListener('submit', function(e) {
-            const query = document.getElementById('search-input').value;
-            if (!query || query.trim() === '') {
-                e.preventDefault();
+            e.preventDefault();
+            const query = document.getElementById('search-input').value.trim();
+            if (!query) {
                 return false;
             }
+            window.location.href = '/search?q=' + encodeURIComponent(query);
         });
     </script>
 
