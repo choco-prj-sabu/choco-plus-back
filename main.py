@@ -359,10 +359,26 @@ def trend():
                         v_id = item['videoId']
                         video_ids.append(v_id)
                         
-                        # Try to get duration from Invidious response first
+                        # Get duration from lengthSeconds
                         duration = ''
-                        if 'lengthSeconds' in item:
-                            duration = format_time_seconds(int(item.get('lengthSeconds', 0)))
+                        length_seconds = item.get('lengthSeconds', 0)
+                        if length_seconds and length_seconds > 0:
+                            duration = format_time_seconds(int(length_seconds))
+                        
+                        # Get view count
+                        view_count = item.get('viewCount', 0)
+                        if view_count > 0:
+                            if view_count >= 1000000:
+                                views = f"{view_count/1000000:.1f}M"
+                            elif view_count >= 1000:
+                                views = f"{view_count/1000:.1f}K"
+                            else:
+                                views = str(view_count)
+                        else:
+                            views = 'N/A'
+                        
+                        # Get published date - use publishedText instead of uploadedAt
+                        published_at = item.get('publishedText', '')
                         
                         results.append({
                             'id': v_id,
@@ -370,38 +386,9 @@ def trend():
                             'thumbnail': get_proxy_thumbnail(v_id, proxy_type),
                             'channel': item['author'],
                             'duration': duration,
-                            'views': 'N/A',
-                            'published_at': item.get('uploadedAt', '')
+                            'views': views,
+                            'published_at': published_at
                         })
-                    
-                    # Fetch duration and view count from YouTube API
-                    if video_ids:
-                        for key in YOUTUBE_API_KEYS:
-                            try:
-                                stats_url = f"https://www.googleapis.com/youtube/v3/videos?part=contentDetails,statistics&id={','.join(video_ids[:50])}&key={key}"
-                                stats_response = requests.get(stats_url, timeout=5)
-                                if stats_response.status_code == 200:
-                                    stats_data = stats_response.json()
-                                    stats_map = {item['id']: item for item in stats_data.get('items', [])}
-                                    for result in results:
-                                        if result['id'] in stats_map:
-                                            item = stats_map[result['id']]
-                                            duration = item.get('contentDetails', {}).get('duration', '')
-                                            # Only update duration if not already set from Invidious
-                                            if not result['duration'] and duration:
-                                                result['duration'] = parse_iso8601_duration(duration)
-                                            
-                                            view_count = int(item.get('statistics', {}).get('viewCount', 0))
-                                            if view_count >= 1000000:
-                                                result['views'] = f"{view_count/1000000:.1f}M"
-                                            elif view_count >= 1000:
-                                                result['views'] = f"{view_count/1000:.1f}K"
-                                            else:
-                                                result['views'] = str(view_count)
-                                    break
-                            except Exception as e:
-                                print(f"Error fetching trend stats: {e}")
-                                continue
                     break
             except:
                 continue
