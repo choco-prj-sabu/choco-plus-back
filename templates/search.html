@@ -43,16 +43,17 @@
     .type-selector a:hover {
         background: #333;
     }
-    .video-duration {
-        position: absolute;
-        bottom: 8px;
-        right: 8px;
-        background: rgba(0, 0, 0, 0.8);
+    .date-format-selector {
+        font-size: 0.9rem;
+        color: #aaa;
+    }
+    .date-format-selector select {
+        background: #2a2a2a;
         color: #fff;
-        padding: 4px 8px;
-        border-radius: 4px;
-        font-size: 0.8rem;
-        font-weight: bold;
+        border: 1px solid #444;
+        padding: 5px;
+        border-radius: 5px;
+        margin-left: 5px;
     }
     .channel-card {
         padding: 20px;
@@ -103,13 +104,22 @@
         <a onclick="document.cookie='search_type=video; max-age=2592000; path=/'; location.href='/search?q={{ query }}'" class="{% if search_type != 'channel' %}active{% endif %}">動画検索</a>
         <a onclick="document.cookie='search_type=channel; max-age=2592000; path=/'; location.href='/search?q={{ query }}'" class="{% if search_type == 'channel' %}active{% endif %}">チャンネル検索</a>
     </div>
-    <div class="proxy-selector">
-        サムネイル:
-        <select id="proxy-select" onchange="document.cookie='proxy_type=' + this.value + '; max-age=2592000; path=/'; location.href='/search?q={{ query }}'">
-            <option value="self-hosted" {{ 'selected' if proxy_type == 'self-hosted' }}>自サーバー</option>
-            <option value="img.youtube.com" {{ 'selected' if proxy_type == 'img.youtube.com' }}>img.youtube.com</option>
-            <option value="i.ytimg.com" {{ 'selected' if proxy_type == 'i.ytimg.com' }}>i.ytimg.com</option>
-        </select>
+    <div style="display: flex; gap: 20px;">
+        <div class="date-format-selector">
+            日付:
+            <select onchange="document.cookie='date_format=' + this.value + '; max-age=2592000; path=/'; location.href='/search?q={{ query }}'">
+                <option value="ago" {{ 'selected' if date_format == 'ago' or not date_format }}>~ago</option>
+                <option value="date" {{ 'selected' if date_format == 'date' }}>YYYY-MM-DD</option>
+            </select>
+        </div>
+        <div class="proxy-selector">
+            サムネイル:
+            <select id="proxy-select" onchange="document.cookie='proxy_type=' + this.value + '; max-age=2592000; path=/'; location.href='/search?q={{ query }}'">
+                <option value="self-hosted" {{ 'selected' if proxy_type == 'self-hosted' }}>自サーバー</option>
+                <option value="img.youtube.com" {{ 'selected' if proxy_type == 'img.youtube.com' }}>img.youtube.com</option>
+                <option value="i.ytimg.com" {{ 'selected' if proxy_type == 'i.ytimg.com' }}>i.ytimg.com</option>
+            </select>
+        </div>
     </div>
 </div>
 
@@ -151,7 +161,7 @@
                 <span class="view-count">視聴数: {{ result.views }}</span>
                 {% endif %}
                 {% if result.published_at %}
-                <span class="published-date">{{ result.published_at|format_relative_date }}</span>
+                <span class="published-date">{{ result.published_at|format_date(date_format) }}</span>
                 {% endif %}
             </div>
         </div>
