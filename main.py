@@ -466,8 +466,8 @@ def format_time_seconds(seconds):
     except:
         return ""
 
-def format_relative_date(iso_date_str):
-    """Format ISO 8601 date to relative time format like '2 days ago'"""
+def format_date_with_cookie(iso_date_str, date_format=None):
+    """Format ISO 8601 date based on cookie preference or parameter"""
     if not iso_date_str:
         return ""
     try:
@@ -478,6 +478,15 @@ def format_relative_date(iso_date_str):
         else:
             dt = datetime.fromisoformat(iso_date_str)
         
+        # If format not specified, default to 'ago'
+        if date_format is None:
+            date_format = 'ago'
+        
+        # YYYY-MM-DD format
+        if date_format == 'date':
+            return dt.strftime('%Y-%m-%d')
+        
+        # ~ago format (default)
         now = datetime.now(dt.tzinfo) if dt.tzinfo else datetime.utcnow()
         delta = now - dt
         days = delta.days
@@ -508,6 +517,10 @@ def format_relative_date(iso_date_str):
             return f"{years} year{'s' if years > 1 else ''} ago"
     except:
         return iso_date_str[:10] if len(iso_date_str) >= 10 else iso_date_str
+
+def format_relative_date(iso_date_str):
+    """Format ISO 8601 date to relative time format (for backward compatibility)"""
+    return format_date_with_cookie(iso_date_str, 'ago')
 
 def get_video_details(video_id, key):
     try:
@@ -710,7 +723,8 @@ def channel(channel_id):
         import traceback
         traceback.print_exc()
     
-    return render_template('channel.html', channel=channel, videos=videos, shorts=shorts)
+    date_format = request.cookies.get('date_format', 'ago')
+    return render_template('channel.html', channel=channel, videos=videos, shorts=shorts, date_format=date_format)
 
 @app.route('/api/channel/<channel_id>/more')
 def channel_more(channel_id):
@@ -777,8 +791,9 @@ def channel_more(channel_id):
         print(f"Error in channel_more: {e}")
         return jsonify({'videos': []})
 
-# Register Jinja2 filter
+# Register Jinja2 filters
 app.jinja_env.filters['format_relative_date'] = format_relative_date
+app.jinja_env.filters['format_date'] = format_date_with_cookie
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
