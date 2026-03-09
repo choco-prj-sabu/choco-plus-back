@@ -3,6 +3,7 @@ from flask_cors import CORS
 import requests
 import random
 import os
+import time
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'choco-tube-dev-key')
@@ -38,7 +39,7 @@ INVIDIOUS_INSTANCES = [
     "https://inv.kamuridesu.com",
     "https://inv.thepixora.com",
     "https://invidious.tiekoetter.com",
-    "https://youtube.mosesmang.com",
+    "https://youtube.mosingsmang.com",
     "https://invidious.ducks.party",
     "https://inv.zoomerville.com",
     "https://invidious.materialio.us",
@@ -48,6 +49,59 @@ INVIDIOUS_INSTANCES = [
     "https://invidious.reallyaweso.me",
     "https://invidious.dhusch.de"
 ]
+
+STREAM_API = "https://simple-yt-stream.onrender.com/api/video/"
+M3U8_API = "https://simple-yt-stream.onrender.com/api/m3u8/"
+
+def get_random_headers():
+    """Return random user agent headers"""
+    user_agents = [
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.6 Safari/605.1.15',
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:92.0) Gecko/20100101 Firefox/92.0',
+    ]
+    return {'User-Agent': random.choice(user_agents)}
+
+def get_stream_url(video_id):
+    """Fetch stream URLs from multiple APIs"""
+    urls = {
+        'primary': None,
+        'fallback': None,
+        'm3u8': None,
+        'embed': f"https://www.youtube.com/embed/{video_id}?autoplay=1"
+    }
+    
+    try:
+        res = requests.get(f"{STREAM_API}{video_id}", headers=get_random_headers(), timeout=(3, 6))
+        if res.status_code == 200:
+            data = res.json()
+            formats = data.get('formats', [])
+            
+            for fmt in formats:
+                if fmt.get('itag') == '18':
+                    urls['primary'] = fmt.get('url')
+                    break
+            
+            if not urls['primary']:
+                for fmt in formats:
+                    if fmt.get('url') and fmt.get('vcodec') != 'none':
+                        urls['fallback'] = fmt.get('url')
+                        break
+    except Exception as e:
+        print(f"Stream API error: {e}")
+    
+    try:
+        res = requests.get(f"{M3U8_API}{video_id}", headers=get_random_headers(), timeout=(3, 6))
+        if res.status_code == 200:
+            data = res.json()
+            m3u8_formats = data.get('m3u8_formats', [])
+            if m3u8_formats:
+                best = max(m3u8_formats, key=lambda x: int(x.get('resolution', '0x0').split('x')[-1] or 0))
+                urls['m3u8'] = best.get('url')
+    except Exception as e:
+        print(f"M3U8 API error: {e}")
+    
+    return urls
 
 def get_proxy_thumbnail(video_id, proxy_type="wsrv.nl"):
     if proxy_type == "i.ytimg.com":
@@ -460,7 +514,8 @@ def proxy_thumbnail(video_id):
 
 @app.route('/watch/<video_id>')
 def watch(video_id):
-    return render_template('watch.html', video_id=video_id)
+    streams = get_stream_url(video_id)
+    return render_template('watch.html', video_id=video_id, streams=streams)
 
 def format_view_count(count):
     if isinstance(count, str):
