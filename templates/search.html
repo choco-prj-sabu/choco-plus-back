@@ -55,6 +55,10 @@
         border-radius: 5px;
         margin-left: 5px;
     }
+    .date-format-selector select:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+    }
     .channel-card {
         padding: 20px;
         background: #2a2a2a;
@@ -95,10 +99,45 @@
         color: #aaa;
         font-size: 0.9rem;
     }
+    .warning-message {
+        background: #3a2a2a;
+        border: 1px solid #aa5533;
+        color: #ffb366;
+        padding: 10px 15px;
+        border-radius: 5px;
+        margin-bottom: 15px;
+        display: none;
+    }
+    .warning-message.show {
+        display: block;
+    }
 </style>
+<script>
+    function handleDateFormatChange(value) {
+        var searchSource = '{{ search_source }}';
+        var warningMsg = document.getElementById('invidious-warning');
+        
+        if (searchSource === 'invidious' && value === 'date') {
+            // Show warning and revert to ~ago
+            if (warningMsg) {
+                warningMsg.classList.add('show');
+            }
+            // Reset the select to ~ago
+            document.getElementById('date-format-select').value = 'ago';
+            return false;
+        }
+        
+        // Normal behavior - save the selection
+        document.cookie = 'date_format=' + value + '; max-age=2592000; path=/';
+        location.href = '/search?q={{ query }}';
+    }
+</script>
 {% endblock %}
 
 {% block content %}
+<div id="invidious-warning" class="warning-message">
+    invidious優先検索では日付表示をYYYY-MM-DDのようにすることはできません。
+</div>
 <div class="search-options">
     <div class="type-selector">
         <a onclick="document.cookie='search_type=video; max-age=2592000; path=/'; location.href='/search?q={{ query }}'" class="{% if search_type != 'channel' %}active{% endif %}">動画検索</a>
@@ -107,9 +146,9 @@
     <div style="display: flex; gap: 20px;">
         <div class="date-format-selector">
             日付:
-            <select onchange="document.cookie='date_format=' + this.value + '; max-age=2592000; path=/'; location.href='/search?q={{ query }}'">
+            <select id="date-format-select" onchange="handleDateFormatChange(this.value)">
                 <option value="ago" {{ 'selected' if date_format == 'ago' or not date_format }}>~ago</option>
-                <option value="date" {{ 'selected' if date_format == 'date' }}>YYYY-MM-DD</option>
+                <option value="date" {{ 'selected' if date_format == 'date' }} {% if search_source == 'invidious' %}disabled{% endif %}>YYYY-MM-DD</option>
             </select>
         </div>
         <div class="proxy-selector">
@@ -161,7 +200,7 @@
                 <span class="view-count">視聴数: {{ result.views }}</span>
                 {% endif %}
                 {% if result.published_at %}
-                <span class="published-date">{{ result.published_at|format_date(date_format) }}</span>
+                <span class="published-date">{% if search_source == 'invidious' %}{{ result.published_at }}{% else %}{{ result.published_at|format_date(date_format) }}{% endif %}</span>
                 {% endif %}
             </div>
         </div>
