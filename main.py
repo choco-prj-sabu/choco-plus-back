@@ -49,12 +49,15 @@ INVIDIOUS_INSTANCES = [
     "https://invidious.dhusch.de"
 ]
 
-def get_proxy_thumbnail(video_id, proxy_type="img.youtube.com"):
+def get_proxy_thumbnail(video_id, proxy_type="wsrv.nl"):
     if proxy_type == "i.ytimg.com":
         return f"https://i.ytimg.com/vi/{video_id}/hqdefault.jpg"
     elif proxy_type == "self-hosted":
         # Self-hosted proxy thumbnail method
         return f"/api/thumbnail/{video_id}"
+    elif proxy_type == "wsrv.nl":
+        # wsrv.nl proxy thumbnail method
+        return f"https://wsrv.nl/?url=https://i.ytimg.com/vi/{video_id}/hqdefault.jpg"
     return f"https://img.youtube.com/vi/{video_id}/hqdefault.jpg"
 
 def parse_iso8601_duration(duration_str):
@@ -209,7 +212,7 @@ def search_invidious(query, page=1, proxy_type="img.youtube.com", search_type="v
 @app.route('/')
 def index():
     # Get preferences from cookies or set defaults
-    proxy_type = request.cookies.get('proxy_type', 'self-hosted')
+    proxy_type = request.cookies.get('proxy_type', 'wsrv.nl')
     search_mode = request.cookies.get('search_mode', 'inv_first')
     
     response = make_response(render_template('index.html', proxy_type=proxy_type, search_mode=search_mode))
@@ -226,7 +229,7 @@ def search():
     mode = request.cookies.get('search_mode', 'inv_first')
     page = request.args.get('page', 1, type=int)
     token = request.args.get('token', None)
-    proxy_type = request.cookies.get('proxy_type', 'self-hosted')
+    proxy_type = request.cookies.get('proxy_type', 'wsrv.nl')
     search_type = request.cookies.get('search_type', 'video')
     date_format = request.cookies.get('date_format', 'ago')
     
@@ -361,10 +364,14 @@ def get_japan_trend_by_category(category='all', proxy_type='self-hosted'):
 @app.route('/trend')
 def trend():
     region = request.cookies.get('trend_region', 'JP')
-    proxy_type = request.cookies.get('proxy_type', 'self-hosted')
+    proxy_type = request.cookies.get('proxy_type', 'wsrv.nl')
     date_format = request.cookies.get('date_format', 'ago')
     jp_category = request.cookies.get('trend_category', 'all')
     results = []
+    
+    # For non-JP regions, force 'ago' format only
+    if region != 'JP':
+        date_format = 'ago'
     
     if region == 'JP':
         results = get_japan_trend_by_category(jp_category, proxy_type)
