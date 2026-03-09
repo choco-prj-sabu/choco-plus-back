@@ -5,12 +5,48 @@
 {% block content %}
 <div style="max-width: 1000px; margin: 0 auto;">
     <div style="position: relative; width: 100%; padding-top: 56.25%; background: #000; border-radius: 12px; overflow: hidden; box-shadow: 0 10px 30px rgba(0,0,0,0.8);">
-        <iframe 
-            src="https://www.youtube.com/embed/{{ video_id }}?autoplay=1" 
-            style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; border: none;" 
-            allow="autoplay; encrypted-media" 
-            allowfullscreen>
-        </iframe>
+        {% if streams and (streams.primary or streams.fallback or streams.m3u8) %}
+            <video id="video-player" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; border: none;" 
+                   controls autoplay playsinline poster="https://i.ytimg.com/vi/{{ video_id }}/maxresdefault.jpg">
+                {% if streams.primary %}
+                    <source src="{{ streams.primary }}" type="video/mp4">
+                {% endif %}
+                {% if streams.fallback %}
+                    <source src="{{ streams.fallback }}" type="video/mp4">
+                {% endif %}
+                {% if streams.m3u8 %}
+                    <source src="{{ streams.m3u8 }}" type="application/x-mpegURL">
+                {% endif %}
+                ストリーム再生に対応していないブラウザです。下記から再生してください。
+            </video>
+        {% else %}
+            <iframe 
+                src="https://www.youtube.com/embed/{{ video_id }}?autoplay=1" 
+                style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; border: none;" 
+                allow="autoplay; encrypted-media" 
+                allowfullscreen>
+            </iframe>
+        {% endif %}
     </div>
+    
+    {% if streams %}
+    <div style="margin-top: 20px; padding: 15px; background: #1a1a1a; border-radius: 8px; color: #fff;">
+        <p style="margin: 0 0 10px 0; font-size: 14px; color: #888;">再生方法:</p>
+        <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+            {% if streams.primary %}
+            <span style="background: #28a745; padding: 8px 12px; border-radius: 4px; font-size: 12px;">✓ Primary</span>
+            {% endif %}
+            {% if streams.fallback %}
+            <span style="background: #007BFF; padding: 8px 12px; border-radius: 4px; font-size: 12px;">✓ Fallback</span>
+            {% endif %}
+            {% if streams.m3u8 %}
+            <span style="background: #6f42c1; padding: 8px 12px; border-radius: 4px; font-size: 12px;">✓ HLS (m3u8)</span>
+            {% endif %}
+            {% if not streams.primary and not streams.fallback and not streams.m3u8 %}
+            <span style="background: #6c757d; padding: 8px 12px; border-radius: 4px; font-size: 12px;">YouTubeEmbed使用</span>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
 </div>
 {% endblock %}
