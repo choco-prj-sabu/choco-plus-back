@@ -1,5 +1,6 @@
 from flask import Flask, render_template, request, jsonify, make_response
 from flask_cors import CORS
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import requests
 import random
 import os
@@ -456,10 +457,10 @@ def proxy_thumbnail(video_id):
     except:
         pass
     # Fallback to 1x1 transparent pixel if fetch fails
-    return bytes.fromhex('47494638396101000100800000FFFFFF00000021F90400000000002C00000000010001000002024401003B'), 200, {'Content-Type': 'image/gif'}
+    return bytes.fromhex(
+        '47494638396101000100800000FFFFFF00000021F90400000000002C00000000010001000002024401003B'
+    ), 200, {'Content-Type': 'image/gif'}
 
-import asyncio
-from concurrent.futures import ThreadPoolExecutor, as_completed
 
 STREAM_APIS = [
     "https://xeroxyt-nt-apiv1-0ydt.onrender.com",
@@ -469,44 +470,53 @@ STREAM_APIS = [
     "https://vpdzyc-3000.csb.app"
 ]
 
+
 def fetch_stream_from_api(api_url, video_id):
     """Fetch stream URL from a single API"""
     try:
-        response = requests.get(f"{api_url}/stream?id={video_id}", timeout=30)
+        response = requests.get(
+            f"{api_url}/stream?id={video_id}",
+            timeout=10
+        )
         if response.status_code == 200:
             data = response.json()
-            if data.get('url'):
+            if data.get('streamingUrl'):
+                return data.get('streamingUrl')
+            elif data.get('url'):
                 return data.get('url')
             elif data.get('videos'):
                 videos = data.get('videos', [])
                 if videos and len(videos) > 0:
                     return videos[0].get('url')
-    except:
+    except Exception:
         pass
     return None
+
 
 @app.route('/api/stream/<video_id>')
 def get_stream(video_id):
     """Fetch stream URL from multiple APIs in parallel"""
     stream_url = None
-    
-    # Fetch from all APIs in parallel using ThreadPoolExecutor
+
     with ThreadPoolExecutor(max_workers=5) as executor:
         futures = {
-            executor.submit(fetch_stream_from_api, api, video_id): api 
+            executor.submit(
+                fetch_stream_from_api,
+                api,
+                video_id
+            ): api
             for api in STREAM_APIS
         }
-        
-        # Return as soon as any API returns a valid stream URL
+
         for future in as_completed(futures):
             try:
                 result = future.result()
                 if result:
                     stream_url = result
                     break
-            except:
+            except Exception:
                 continue
-    
+
     if stream_url:
         return jsonify({'stream_url': stream_url})
     else:
