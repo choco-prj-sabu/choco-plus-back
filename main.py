@@ -522,9 +522,95 @@ def get_stream(video_id):
     else:
         return jsonify({'error': 'Could not fetch stream'}), 503
 
+@app.route('/api/invidious-stream/<video_id>')
+def invidious_stream(video_id):
+    """Fetch video formats from multiple invidious instances in parallel"""
+    formats = {
+        'mp4': {},
+        'video': {},
+        'audio': {},
+        'hls': {}
+    }
+
+    def fetch_from_invidious(instance):
+        try:
+            url = f"{instance}/api/v1/videos/{video_id}"
+            response = requests.get(url, timeout=8)
+            if response.status_code == 200:
+                data = response.json()
+                video_formats = {
+                    'mp4': {},
+                    'video': {},
+                    'audio': {},
+                    'hls': {}
+                }
+
+                for fmt in data.get('formatStreams', []):
+                    quality = fmt.get('qualityLabel', '')
+                    url_key = fmt.get('url', '')
+                    codec = fmt.get('codec', '')
+
+                    if 'mp4' in codec.lower() and url_key:
+                        video_formats['mp4'][
+                            quality.split(' ')[0] + ' (MP4)'
+                        ] = url_key
+
+                if data.get('hlsUrl'):
+                    video_formats['hls']['HLS'] = data.get('hlsUrl')
+
+                for fmt in data.get('adaptiveFormats', []):
+                    url_key = fmt.get('url', '')
+                    codec = fmt.get('codec', '')
+                    quality = fmt.get('qualityLabel', '')
+
+                    if not url_key:
+                        continue
+
+                    if 'video' in codec.lower():
+                        q = quality.split(' ')[0] if quality else 'unknown'
+                        video_formats['video'][
+                            q + ' (WebM)'
+                        ] = url_key
+                    elif 'audio' in codec.lower():
+                        bitrate = fmt.get('bitrate', 'unknown')
+                        codec_name = 'WEBM' if 'opus' in codec.lower() else 'M4A'
+                        video_formats['audio'][
+                            f"{bitrate} ({codec_name})"
+                        ] = url_key
+
+                return video_formats
+        except Exception:
+            pass
+        return None
+
+    with ThreadPoolExecutor(max_workers=len(INVIDIOUS_INSTANCES)) as executor:
+        futures = {
+            executor.submit(fetch_from_invidious, inst): inst
+            for inst in INVIDIOUS_INSTANCES
+        }
+
+        for future in as_completed(futures):
+            try:
+                result = future.result()
+                if result and (result['mp4'] or result['video'] or
+                               result['audio'] or result['hls']):
+                    formats = result
+                    break
+            except Exception:
+                continue
+
+    if (formats['mp4'] or formats['video'] or
+            formats['audio'] or formats['hls']):
+        return jsonify({
+            'success': True,
+            'formats': formats
+        })
+    else:
+        return jsonify({'success': False}), 503
+
+
 @app.route('/watch/<video_id>')
 def watch(video_id):
-    # Try to fetch video metadata
     metadata = {
         'video_title': None,
         'view_count': None,
@@ -533,11 +619,13 @@ def watch(video_id):
         'subscriber_count': None,
         'channel_icon': None
     }
-    
-    # Try to get metadata from YouTube API
+
     for key in YOUTUBE_API_KEYS[:3]:
         try:
-            url = f"https://www.googleapis.com/youtube/v3/videos?part=snippet,statistics&id={video_id}&key={key}"
+            url = (
+                f"https://www.googleapis.com/youtube/v3/"
+                f"videos?part=snippet,statistics&id={video_id}&key={key}"
+            )
             response = requests.get(url, timeout=5)
             if response.status_code == 200:
                 data = response.json()
@@ -545,41 +633,64 @@ def watch(video_id):
                 if items:
                     item = items[0]
                     metadata['video_title'] = item['snippet'].get('title')
-                    metadata['published_at'] = item['snippet'].get('publishedAt', '').split('T')[0]
-                    
-                    view_count = int(item['statistics'].get('viewCount', 0))
+                    metadata['published_at'] = (
+                        item['snippet'].get('publishedAt', '').split('T')[0]
+                    )
+
+                    view_count = int(
+                        item['statistics'].get('viewCount', 0)
+                    )
                     if view_count >= 1000000:
-                        metadata['view_count'] = f"{view_count/1000000:.1f}M"
+                        metadata['view_count'] = (
+                            f"{view_count/1000000:.1f}M"
+                        )
                     elif view_count >= 1000:
                         metadata['view_count'] = f"{view_count/1000:.1f}K"
                     else:
                         metadata['view_count'] = str(view_count)
-                    
-                    # Get channel info
+
                     channel_id = item['snippet']['channelId']
-                    channel_url = f"https://www.googleapis.com/youtube/v3/channels?part=snippet,statistics&id={channel_id}&key={key}"
-                    channel_response = requests.get(channel_url, timeout=5)
+                    channel_url = (
+                        f"https://www.googleapis.com/youtube/v3/"
+                        f"channels?part=snippet,statistics&id="
+                        f"{channel_id}&key={key}"
+                    )
+                    channel_response = requests.get(
+                        channel_url,
+                        timeout=5
+                    )
                     if channel_response.status_code == 200:
                         channel_data = channel_response.json()
                         channel_items = channel_data.get('items', [])
                         if channel_items:
                             ch = channel_items[0]
-                            metadata['channel_name'] = ch['snippet'].get('title')
-                            
-                            subs = int(ch['statistics'].get('subscriberCount', 0))
+                            metadata['channel_name'] = (
+                                ch['snippet'].get('title')
+                            )
+
+                            subs = int(
+                                ch['statistics'].get('subscriberCount', 0)
+                            )
                             if subs >= 1000000:
-                                metadata['subscriber_count'] = f"{subs/1000000:.1f}M"
+                                metadata['subscriber_count'] = (
+                                    f"{subs/1000000:.1f}M"
+                                )
                             elif subs >= 1000:
-                                metadata['subscriber_count'] = f"{subs/1000:.1f}K"
+                                metadata['subscriber_count'] = (
+                                    f"{subs/1000:.1f}K"
+                                )
                             else:
                                 metadata['subscriber_count'] = str(subs)
-                            
+
                             thumbnails = ch['snippet'].get('thumbnails', {})
-                            metadata['channel_icon'] = thumbnails.get('high', {}).get('url') or thumbnails.get('default', {}).get('url')
+                            metadata['channel_icon'] = (
+                                thumbnails.get('high', {}).get('url')
+                                or thumbnails.get('default', {}).get('url')
+                            )
                     break
-        except:
+        except Exception:
             continue
-    
+
     return render_template('watch.html', video_id=video_id, **metadata)
 
 def format_view_count(count):
