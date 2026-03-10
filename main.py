@@ -1,9 +1,13 @@
 from flask import Flask, render_template, request, jsonify, make_response
 from flask_cors import CORS
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor, as_completed, TimeoutError
 import requests
 import random
 import os
+import logging
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'choco-tube-dev-key')
@@ -535,7 +539,7 @@ def invidious_stream(video_id):
     def fetch_from_invidious(instance):
         try:
             url = f"{instance}/api/v1/videos/{video_id}"
-            response = requests.get(url, timeout=8)
+            response = requests.get(url, timeout=15)
             if response.status_code == 200:
                 data = response.json()
                 video_formats = {
@@ -579,8 +583,12 @@ def invidious_stream(video_id):
                         ] = url_key
 
                 return video_formats
-        except Exception:
-            pass
+        except requests.Timeout:
+            logger.warning(f"Timeout fetching from {instance} for video {video_id}")
+        except requests.ConnectionError as e:
+            logger.warning(f"Connection error with {instance}: {e}")
+        except Exception as e:
+            logger.warning(f"Error fetching from {instance}: {e}")
         return None
 
     with ThreadPoolExecutor(max_workers=len(INVIDIOUS_INSTANCES)) as executor:
@@ -589,15 +597,19 @@ def invidious_stream(video_id):
             for inst in INVIDIOUS_INSTANCES
         }
 
-        for future in as_completed(futures):
+        for future in as_completed(futures, timeout=20):
             try:
-                result = future.result()
+                result = future.result(timeout=2)
                 if result and (result['mp4'] or result['video'] or
                                result['audio'] or result['hls']):
                     formats = result
                     break
-            except Exception:
-                continue
+            except TimeoutError:
+                instance = futures.get(future, 'unknown')
+                logger.warning(f"Future timeout for instance {instance}")
+            except Exception as e:
+                instance = futures.get(future, 'unknown')
+                logger.warning(f"Error from instance {instance}: {e}")
 
     if (formats['mp4'] or formats['video'] or
             formats['audio'] or formats['hls']):
