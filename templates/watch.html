@@ -315,20 +315,6 @@
         <!-- Stream Method Buttons -->
         <div class="stream-buttons">
             <button class="stream-btn active" onclick="switchStream('ytdlp')" id="btn-ytdlp">ytdlpストリーム</button>
-            <button class="stream-btn" onclick="switchStream('invidious')" id="btn-invidious">invidiousストリーム</button>
-        </div>
-
-        <!-- Quality Selector (Invidious only) -->
-        <div class="quality-selector" id="qualitySelector">
-            <div style="width: 100%;">
-                <div class="quality-tabs">
-                    <button class="quality-tab active" onclick="switchQualityType('mp4')">MP4</button>
-                    <button class="quality-tab" onclick="switchQualityType('video')">映像</button>
-                    <button class="quality-tab" onclick="switchQualityType('audio')">音声</button>
-                    <button class="quality-tab" onclick="switchQualityType('hls')">HLS</button>
-                </div>
-                <div class="quality-options" id="qualityOptions"></div>
-            </div>
         </div>
 
         <!-- Video Player -->
@@ -381,34 +367,14 @@
 </div>
 
 <script>
-    let currentStream = 'ytdlp';
-    let currentQualityType = 'mp4';
-    let invidiousData = null;
-
     const videoId = '{{ video_id }}';
     const playerContainer = document.getElementById('playerContainer');
 
-    // 初期ロード
-    loadStream('ytdlp');
+    loadYtdlpStream();
 
     function switchStream(type) {
-        currentStream = type;
-        
-        // ボタンのスタイル更新
-        document.getElementById('btn-ytdlp').classList.toggle('active', type === 'ytdlp');
-        document.getElementById('btn-invidious').classList.toggle('active', type === 'invidious');
-        
-        // クオリティセレクタの表示非表示
-        document.getElementById('qualitySelector').classList.toggle('show', type === 'invidious');
-        
-        loadStream(type);
-    }
-
-    function loadStream(type) {
         if (type === 'ytdlp') {
             loadYtdlpStream();
-        } else {
-            loadInvidiousStream();
         }
     }
 
@@ -428,119 +394,6 @@
                 console.error('Error:', error);
                 showError('ストリームリンクを取得できませんでした。再読み込みしてください');
             });
-    }
-
-    function loadInvidiousStream() {
-        playerContainer.innerHTML = '<div class="loading-spinner"><div class="spinner"></div><p style="color: #aaa; font-size: 14px;">ストリームを読み込み中...</p></div>';
-        
-        fetch('/api/invidious-stream/' + videoId)
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    invidiousData = data;
-                    updateQualityOptions();
-                    loadQuality('mp4', Object.keys(data.formats.mp4)[0] || null);
-                } else {
-                    showError('invidious取得に失敗しました。再読み込みしてください');
-                }
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                showError('invidious取得に失敗しました。再読み込みしてください');
-            });
-    }
-
-    function updateQualityOptions() {
-        const optionsDiv = document.getElementById('qualityOptions');
-        optionsDiv.innerHTML = '';
-        
-        const formats = invidiousData.formats[currentQualityType] || {};
-        let keys = Object.keys(formats);
-        
-        // Sort qualities based on type
-        if (currentQualityType === 'video') {
-            // Sort video by resolution (descending: 1080p, 720p, 480p, etc.)
-            keys.sort((a, b) => {
-                const aRes = parseInt(a) || 0;
-                const bRes = parseInt(b) || 0;
-                return bRes - aRes;
-            });
-        } else if (currentQualityType === 'audio') {
-            // Sort audio by bitrate (descending: highest bitrate first)
-            keys.sort((a, b) => {
-                const aBitrate = parseInt(a) || 0;
-                const bBitrate = parseInt(b) || 0;
-                return bBitrate - aBitrate;
-            });
-        }
-        
-        keys.forEach((key, index) => {
-            const option = document.createElement('button');
-            option.className = 'quality-option' + (index === 0 ? ' selected' : '');
-            option.textContent = key;
-            option.onclick = () => loadQuality(currentQualityType, key);
-            optionsDiv.appendChild(option);
-        });
-    }
-
-    function switchQualityType(type) {
-        currentQualityType = type;
-        
-        // タブボタンの更新
-        document.querySelectorAll('.quality-tab').forEach(btn => {
-            btn.classList.toggle('active', btn.textContent.includes(type === 'mp4' ? 'MP4' : type === 'video' ? '映像' : type === 'audio' ? '音声' : 'HLS'));
-        });
-        
-        updateQualityOptions();
-        
-        const formats = invidiousData.formats[type] || {};
-        const firstKey = Object.keys(formats)[0];
-        if (firstKey) {
-            loadQuality(type, firstKey);
-        }
-    }
-
-    function loadQuality(type, key) {
-        if (!invidiousData || !invidiousData.formats[type] || !invidiousData.formats[type][key]) {
-            return;
-        }
-        
-        const url = invidiousData.formats[type][key];
-        const mimeType = getMimeType(type, key);
-        
-        if (type === 'hls') {
-            // HLSはそのまま流す
-            playerContainer.innerHTML = `<video controls><source src="${url}" type="application/x-mpegURL"></video>`;
-        } else if (type === 'audio') {
-            // 音声のみ
-            playerContainer.innerHTML = `<audio controls style="width: 100%;"><source src="${url}" type="${mimeType}"></audio>`;
-        } else {
-            // MP4と映像
-            playerContainer.innerHTML = `<video controls><source src="${url}" type="${mimeType}"></video>`;
-        }
-        
-        // 選択肢のスタイル更新
-        document.querySelectorAll('.quality-option').forEach(opt => {
-            opt.classList.toggle('selected', opt.textContent === key);
-        });
-    }
-
-    function getMimeType(type, key) {
-        if (type === 'audio') {
-            if (key.includes('M4A') || key.includes('AAC')) return 'audio/mp4';
-            if (key.includes('OPUS') || key.includes('Vorbis')) return 'audio/webm';
-            if (key.includes('MP3')) return 'audio/mpeg';
-            return 'audio/webm';
-        } else if (type === 'video') {
-            if (key.includes('H.264') || key.includes('AVC')) return 'video/mp4';
-            if (key.includes('WebM')) return 'video/webm';
-            return 'video/webm';
-        } else if (type === 'mp4') {
-            return 'video/mp4';
-        } else if (type === 'hls') {
-            return 'application/x-mpegURL';
-        }
-        return 'video/mp4';
     }
 
     function showError(message) {
