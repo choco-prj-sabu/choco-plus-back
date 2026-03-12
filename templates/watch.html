@@ -128,7 +128,7 @@
     .player-container {
         position: relative;
         width: 100%;
-        height: 500px;
+        height: 390px;
         background: #000;
         border-radius: 8px;
         overflow: hidden;
@@ -297,7 +297,7 @@
 
     @media (max-width: 900px) {
         .watch-container { grid-template-columns: 1fr; }
-        .player-container { height: 350px; }
+        .player-container { height: 250px; }
         .video-info { flex-direction: column; gap: 10px; }
     }
 </style>
@@ -310,6 +310,7 @@
         <div class="stream-buttons">
             <button class="stream-btn active" onclick="switchStream('ytdlp')" id="btn-ytdlp">ytdlpストリーム</button>
             <button class="stream-btn" onclick="switchStream('invidious')" id="btn-invidious">invidiousストリーム</button>
+            <button class="stream-btn" onclick="switchStream('nocookie')" id="btn-nocookie">nocookie再生</button>
         </div>
 
         <!-- Invidious 画質セレクタ -->
@@ -389,13 +390,26 @@
         currentStreamType = type;
         document.getElementById('btn-ytdlp').classList.toggle('active', type === 'ytdlp');
         document.getElementById('btn-invidious').classList.toggle('active', type === 'invidious');
+        document.getElementById('btn-nocookie').classList.toggle('active', type === 'nocookie');
         document.getElementById('qualitySelector').classList.toggle('show', type === 'invidious');
 
         if (type === 'ytdlp') {
             loadYtdlpStream();
-        } else {
+        } else if (type === 'invidious') {
             loadInvidiousStream();
+        } else if (type === 'nocookie') {
+            loadNocookieStream();
         }
+    }
+
+    // ---- nocookie 再生（YouTube プライバシー強化埋め込み） ----
+    function loadNocookieStream() {
+        playerContainer.innerHTML = `<iframe
+            src="https://www.youtube-nocookie.com/embed/${videoId}?autoplay=1&rel=0"
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+            allowfullscreen
+            style="width:100%;height:100%;border:none;">
+        </iframe>`;
     }
 
     // ---- ytdlp ストリーム（キャッシュ対応・競合防止） ----
