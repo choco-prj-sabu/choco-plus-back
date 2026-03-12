@@ -378,7 +378,8 @@
     let currentStreamType = 'ytdlp';
     let currentQualityType = 'mp4';
     let invidiousFormats = null;
-    let ytdlpCachedUrl = null;  // ytdlp URLキャッシュ（同ページ内のみ有効）
+    let ytdlpCachedUrl = null;
+    let fetchSeq = 0;  // リクエストごとにインクリメントして古い結果を無視する
 
     // 初期ロード
     loadYtdlpStream();
@@ -397,17 +398,19 @@
         }
     }
 
-    // ---- ytdlp ストリーム（キャッシュ対応） ----
+    // ---- ytdlp ストリーム（キャッシュ対応・競合防止） ----
     function loadYtdlpStream() {
         // キャッシュがあれば即再生（APIリクエストなし）
         if (ytdlpCachedUrl) {
             playerContainer.innerHTML = `<video controls autoplay><source src="${ytdlpCachedUrl}" type="video/mp4"></video>`;
             return;
         }
+        const seq = ++fetchSeq;
         showLoading();
         fetch('/api/stream/' + videoId)
             .then(r => r.json())
             .then(data => {
+                if (seq !== fetchSeq || currentStreamType !== 'ytdlp') return;
                 if (data.stream_url) {
                     ytdlpCachedUrl = data.stream_url;
                     playerContainer.innerHTML = `<video controls autoplay><source src="${ytdlpCachedUrl}" type="video/mp4"></video>`;
@@ -415,10 +418,13 @@
                     showError('ストリームの取得に失敗しました。再読み込みしてください');
                 }
             })
-            .catch(() => showError('ストリームの取得に失敗しました。再読み込みしてください'));
+            .catch(() => {
+                if (seq !== fetchSeq || currentStreamType !== 'ytdlp') return;
+                showError('ストリームの取得に失敗しました。再読み込みしてください');
+            });
     }
 
-    // ---- Invidious ストリーム ----
+    // ---- Invidious ストリーム（競合防止） ----
     function loadInvidiousStream() {
         // キャッシュがあればそのまま使う
         if (invidiousFormats) {
@@ -426,10 +432,12 @@
             playFirstAvailable();
             return;
         }
+        const seq = ++fetchSeq;
         showLoading();
         fetch('/api/invidious-stream/' + videoId)
             .then(r => r.json())
             .then(data => {
+                if (seq !== fetchSeq || currentStreamType !== 'invidious') return;
                 if (data.success && data.formats) {
                     invidiousFormats = data.formats;
                     currentQualityType = 'mp4';
@@ -440,7 +448,10 @@
                     showError('ストリームの取得に失敗しました。再読み込みしてください');
                 }
             })
-            .catch(() => showError('ストリームの取得に失敗しました。再読み込みしてください'));
+            .catch(() => {
+                if (seq !== fetchSeq || currentStreamType !== 'invidious') return;
+                showError('ストリームの取得に失敗しました。再読み込みしてください');
+            });
     }
 
     // ---- 画質タブ切り替え ----
