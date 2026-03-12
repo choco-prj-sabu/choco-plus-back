@@ -27,6 +27,7 @@
         display: flex;
         gap: 10px;
         margin-bottom: 10px;
+        flex-wrap: wrap;
     }
 
     .stream-btn {
@@ -56,9 +57,12 @@
 
     .quality-selector {
         display: none;
+        flex-direction: column;
+        gap: 8px;
         margin-bottom: 10px;
-        gap: 10px;
-        flex-wrap: wrap;
+        background: #1a1a1a;
+        border-radius: 8px;
+        padding: 12px;
     }
 
     .quality-selector.show {
@@ -68,23 +72,29 @@
     .quality-tabs {
         display: flex;
         gap: 5px;
-        margin-bottom: 10px;
+        flex-wrap: wrap;
     }
 
     .quality-tab {
-        padding: 6px 12px;
+        padding: 6px 14px;
         border: none;
         border-radius: 4px;
-        background: #222;
+        background: #2a2a2a;
         color: #aaa;
         cursor: pointer;
         font-size: 13px;
+        font-weight: 600;
         transition: all 0.2s;
     }
 
     .quality-tab.active {
         background: #ff6b00;
         color: white;
+    }
+
+    .quality-tab:hover:not(.active) {
+        background: #383838;
+        color: #fff;
     }
 
     .quality-options {
@@ -94,7 +104,7 @@
     }
 
     .quality-option {
-        padding: 6px 12px;
+        padding: 5px 12px;
         border: 1px solid #444;
         border-radius: 4px;
         background: #222;
@@ -106,6 +116,7 @@
 
     .quality-option:hover {
         border-color: #ff6b00;
+        color: #fff;
     }
 
     .quality-option.selected {
@@ -135,10 +146,8 @@
 
     .player-error {
         position: absolute;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
+        top: 0; left: 0;
+        width: 100%; height: 100%;
         display: flex;
         flex-direction: column;
         justify-content: center;
@@ -237,9 +246,7 @@
         flex-shrink: 0;
     }
 
-    .channel-details {
-        flex: 1;
-    }
+    .channel-details { flex: 1; }
 
     .channel-name {
         font-weight: 600;
@@ -289,22 +296,9 @@
     }
 
     @media (max-width: 900px) {
-        .watch-container {
-            grid-template-columns: 1fr;
-        }
-
-        .player-container {
-            height: 350px;
-        }
-
-        .video-info {
-            flex-direction: column;
-            gap: 10px;
-        }
-
-        .stream-buttons {
-            flex-wrap: wrap;
-        }
+        .watch-container { grid-template-columns: 1fr; }
+        .player-container { height: 350px; }
+        .video-info { flex-direction: column; gap: 10px; }
     }
 </style>
 {% endblock %}
@@ -312,12 +306,24 @@
 {% block content %}
 <div class="watch-container">
     <div class="video-section">
-        <!-- Stream Method Buttons -->
+        <!-- 再生方法ボタン -->
         <div class="stream-buttons">
             <button class="stream-btn active" onclick="switchStream('ytdlp')" id="btn-ytdlp">ytdlpストリーム</button>
+            <button class="stream-btn" onclick="switchStream('invidious')" id="btn-invidious">invidiousストリーム</button>
         </div>
 
-        <!-- Video Player -->
+        <!-- Invidious 画質セレクタ -->
+        <div class="quality-selector" id="qualitySelector">
+            <div class="quality-tabs">
+                <button class="quality-tab active" onclick="switchQualityType('mp4')" id="tab-mp4">MP4</button>
+                <button class="quality-tab" onclick="switchQualityType('video')" id="tab-video">映像のみ</button>
+                <button class="quality-tab" onclick="switchQualityType('audio')" id="tab-audio">音声のみ</button>
+                <button class="quality-tab" onclick="switchQualityType('hls')" id="tab-hls">HLS</button>
+            </div>
+            <div class="quality-options" id="qualityOptions"></div>
+        </div>
+
+        <!-- プレイヤー -->
         <div class="player-wrapper">
             <div class="player-container" id="playerContainer">
                 <div class="loading-spinner">
@@ -327,39 +333,38 @@
             </div>
         </div>
 
-        <!-- Video Metadata -->
+        <!-- 動画メタデータ -->
         {% if video_title %}
-            <div class="video-metadata">
-                <div class="video-title">{{ video_title }}</div>
-                <div class="video-info">
-                    {% if view_count %}<span>{{ view_count }} 回視聴</span>{% endif %}
-                    {% if published_at %}<span>{{ published_at }}</span>{% endif %}
-                </div>
-
-                {% if channel_name %}
-                    <div class="channel-info">
-                        {% if channel_icon %}
-                            <img src="{{ channel_icon }}" alt="{{ channel_name }}" class="channel-icon">
-                        {% else %}
-                            <div class="channel-icon"></div>
-                        {% endif %}
-                        <div class="channel-details">
-                            <div class="channel-name">{{ channel_name }}</div>
-                            {% if subscriber_count %}<div class="channel-subs">{{ subscriber_count }} 人がフォロー</div>{% endif %}
-                        </div>
-                    </div>
-                {% endif %}
+        <div class="video-metadata">
+            <div class="video-title">{{ video_title }}</div>
+            <div class="video-info">
+                {% if view_count %}<span>{{ view_count }} 回視聴</span>{% endif %}
+                {% if published_at %}<span>{{ published_at }}</span>{% endif %}
             </div>
+            {% if channel_name %}
+            <div class="channel-info">
+                {% if channel_icon %}
+                    <img src="{{ channel_icon }}" alt="{{ channel_name }}" class="channel-icon">
+                {% else %}
+                    <div class="channel-icon"></div>
+                {% endif %}
+                <div class="channel-details">
+                    <div class="channel-name">{{ channel_name }}</div>
+                    {% if subscriber_count %}<div class="channel-subs">{{ subscriber_count }} 人がフォロー</div>{% endif %}
+                </div>
+            </div>
+            {% endif %}
+        </div>
         {% endif %}
 
-        <!-- Comments Section -->
+        <!-- コメント欄 -->
         <div class="comments-section">
             <div class="comments-title">コメント</div>
             <div class="comment-placeholder">コメント機能は準備中です</div>
         </div>
     </div>
 
-    <!-- Related Videos Sidebar -->
+    <!-- 関連動画サイドバー -->
     <div class="related-videos">
         <div class="related-title">関連動画</div>
         <div class="comment-placeholder">関連動画機能は準備中です</div>
@@ -370,30 +375,162 @@
     const videoId = '{{ video_id }}';
     const playerContainer = document.getElementById('playerContainer');
 
+    let currentStreamType = 'ytdlp';
+    let currentQualityType = 'mp4';
+    let invidiousFormats = null;
+    let ytdlpCachedUrl = null;  // ytdlp URLキャッシュ（同ページ内のみ有効）
+
+    // 初期ロード
     loadYtdlpStream();
 
+    // ---- 再生方法の切り替え ----
     function switchStream(type) {
+        currentStreamType = type;
+        document.getElementById('btn-ytdlp').classList.toggle('active', type === 'ytdlp');
+        document.getElementById('btn-invidious').classList.toggle('active', type === 'invidious');
+        document.getElementById('qualitySelector').classList.toggle('show', type === 'invidious');
+
         if (type === 'ytdlp') {
             loadYtdlpStream();
+        } else {
+            loadInvidiousStream();
         }
     }
 
+    // ---- ytdlp ストリーム（キャッシュ対応） ----
     function loadYtdlpStream() {
-        playerContainer.innerHTML = '<div class="loading-spinner"><div class="spinner"></div><p style="color: #aaa; font-size: 14px;">ストリームを読み込み中...</p></div>';
-        
+        // キャッシュがあれば即再生（APIリクエストなし）
+        if (ytdlpCachedUrl) {
+            playerContainer.innerHTML = `<video controls autoplay><source src="${ytdlpCachedUrl}" type="video/mp4"></video>`;
+            return;
+        }
+        showLoading();
         fetch('/api/stream/' + videoId)
-            .then(response => response.json())
+            .then(r => r.json())
             .then(data => {
                 if (data.stream_url) {
-                    playerContainer.innerHTML = `<video controls><source src="${data.stream_url}" type="video/mp4"></video>`;
+                    ytdlpCachedUrl = data.stream_url;
+                    playerContainer.innerHTML = `<video controls autoplay><source src="${ytdlpCachedUrl}" type="video/mp4"></video>`;
                 } else {
-                    showError('ストリームリンクを取得できませんでした。再読み込みしてください');
+                    showError('ストリームの取得に失敗しました。再読み込みしてください');
                 }
             })
-            .catch(error => {
-                console.error('Error:', error);
-                showError('ストリームリンクを取得できませんでした。再読み込みしてください');
-            });
+            .catch(() => showError('ストリームの取得に失敗しました。再読み込みしてください'));
+    }
+
+    // ---- Invidious ストリーム ----
+    function loadInvidiousStream() {
+        // キャッシュがあればそのまま使う
+        if (invidiousFormats) {
+            renderQualityOptions();
+            playFirstAvailable();
+            return;
+        }
+        showLoading();
+        fetch('/api/invidious-stream/' + videoId)
+            .then(r => r.json())
+            .then(data => {
+                if (data.success && data.formats) {
+                    invidiousFormats = data.formats;
+                    currentQualityType = 'mp4';
+                    updateQualityTabs('mp4');
+                    renderQualityOptions();
+                    playFirstAvailable();
+                } else {
+                    showError('ストリームの取得に失敗しました。再読み込みしてください');
+                }
+            })
+            .catch(() => showError('ストリームの取得に失敗しました。再読み込みしてください'));
+    }
+
+    // ---- 画質タブ切り替え ----
+    function switchQualityType(type) {
+        currentQualityType = type;
+        updateQualityTabs(type);
+        renderQualityOptions();
+        playFirstAvailable();
+    }
+
+    function updateQualityTabs(type) {
+        ['mp4', 'video', 'audio', 'hls'].forEach(t => {
+            document.getElementById('tab-' + t).classList.toggle('active', t === type);
+        });
+    }
+
+    // ---- 画質オプション描画 ----
+    function renderQualityOptions() {
+        const optionsDiv = document.getElementById('qualityOptions');
+        optionsDiv.innerHTML = '';
+        if (!invidiousFormats) return;
+
+        const formats = invidiousFormats[currentQualityType] || {};
+        let keys = Object.keys(formats);
+
+        // 解像度・ビットレートで降順ソート
+        keys.sort((a, b) => {
+            const numA = parseInt(a) || 0;
+            const numB = parseInt(b) || 0;
+            return numB - numA;
+        });
+
+        keys.forEach((key, i) => {
+            const btn = document.createElement('button');
+            btn.className = 'quality-option' + (i === 0 ? ' selected' : '');
+            btn.textContent = key;
+            btn.onclick = () => playQuality(key);
+            optionsDiv.appendChild(btn);
+        });
+    }
+
+    // ---- 最初の画質を自動再生 ----
+    function playFirstAvailable() {
+        if (!invidiousFormats) return;
+        const formats = invidiousFormats[currentQualityType] || {};
+        const keys = Object.keys(formats);
+        if (keys.length > 0) {
+            playQuality(keys[0]);
+        } else {
+            showError('このカテゴリには再生可能なストリームがありません');
+        }
+    }
+
+    // ---- 指定した画質を再生 ----
+    function playQuality(key) {
+        if (!invidiousFormats) return;
+        const formats = invidiousFormats[currentQualityType] || {};
+        const url = formats[key];
+        if (!url) return;
+
+        // 選択ボタン更新
+        document.querySelectorAll('.quality-option').forEach(btn => {
+            btn.classList.toggle('selected', btn.textContent === key);
+        });
+
+        if (currentQualityType === 'hls') {
+            playerContainer.innerHTML = `<video controls autoplay><source src="${url}" type="application/x-mpegURL"></video>`;
+        } else if (currentQualityType === 'audio') {
+            playerContainer.innerHTML = `<audio controls autoplay style="width:100%;margin:auto;display:block;"><source src="${url}" type="${getAudioMime(key)}"></audio>`;
+        } else {
+            playerContainer.innerHTML = `<video controls autoplay><source src="${url}" type="${getVideoMime(key)}"></video>`;
+        }
+    }
+
+    function getVideoMime(key) {
+        if (key.includes('H.264') || key.includes('MP4')) return 'video/mp4';
+        if (key.includes('WebM')) return 'video/webm';
+        return 'video/mp4';
+    }
+
+    function getAudioMime(key) {
+        if (key.includes('AAC')) return 'audio/mp4';
+        if (key.includes('Opus') || key.includes('Vorbis')) return 'audio/webm';
+        if (key.includes('MP3')) return 'audio/mpeg';
+        return 'audio/webm';
+    }
+
+    // ---- UI ヘルパー ----
+    function showLoading() {
+        playerContainer.innerHTML = '<div class="loading-spinner"><div class="spinner"></div><p style="color:#aaa;font-size:14px;">ストリームを読み込み中...</p></div>';
     }
 
     function showError(message) {
@@ -403,8 +540,7 @@
                     <div class="error-message">${message}</div>
                     <button class="reload-button" onclick="location.reload()">再読み込み</button>
                 </div>
-            </div>
-        `;
+            </div>`;
     }
 </script>
 {% endblock %}
