@@ -414,8 +414,6 @@
         "https://api.codetabs.com/v1/proxy?quest=",
     ];
     const ERROR_KEYWORDS = ["shutdown", "<!DOCTYPE", "<html", "temporarily unavailable", "maintenance"];
-    const YOUTUBE_RESTRICT_KEYWORDS = ["protect our community", "Sign in to confirm", "age-restricted",
-                                        "This video is unavailable", "not available in your country"];
     const INV_WORKING_KEY = "invidious_working_instances";
 
     function loadWorkingInstances() {
@@ -451,12 +449,8 @@
                 if (!res.ok) continue;
                 const text = await res.text();
                 if (ERROR_KEYWORDS.some(kw => text.toLowerCase().includes(kw.toLowerCase()))) continue;
-                if (YOUTUBE_RESTRICT_KEYWORDS.some(kw => text.toLowerCase().includes(kw.toLowerCase()))) return { youtube_restricted: true };
                 const json = JSON.parse(text);
-                if (!json.title) {
-                    if (json.error && YOUTUBE_RESTRICT_KEYWORDS.some(kw => json.error.toLowerCase().includes(kw.toLowerCase()))) return { youtube_restricted: true };
-                    continue;
-                }
+                if (!json.title) continue;
 
                 const streams = [];
                 if (json.hlsUrl) {
@@ -503,7 +497,7 @@
         return null;
     }
 
-    // 並列レース型フォールバック（8秒タイムアウト）
+    // 並列レース型: 最初に成功したインスタンスのストリームを返す
     function clientSideInvidiousRace() {
         const working = loadWorkingInstances();
         const all = [...working, ...INV_STREAM_INSTANCES.filter(i => !working.includes(i))];
@@ -512,21 +506,18 @@
             let resolved = false;
             let completed = 0;
             const total = all.length;
-            let ytRestricted = false;
 
             const done = (result) => {
                 completed++;
                 if (!resolved) {
-                    if (result && result.youtube_restricted) {
-                        ytRestricted = true;
-                    } else if (result && result.streams) {
+                    if (result && result.streams && result.streams.length > 0) {
                         resolved = true;
                         resolve(result);
                         return;
                     }
                     if (completed === total) {
                         resolved = true;
-                        resolve(ytRestricted ? { youtube_restricted: true } : null);
+                        resolve(null);
                     }
                 }
             };
@@ -534,10 +525,7 @@
             all.forEach(instance => fetchInvidiousFromInstance(instance).then(done).catch(() => done(null)));
 
             setTimeout(() => {
-                if (!resolved) {
-                    resolved = true;
-                    resolve(ytRestricted ? { youtube_restricted: true } : null);
-                }
+                if (!resolved) { resolved = true; resolve(null); }
             }, 10000);
         });
     }
@@ -609,9 +597,7 @@
 
         clientSideInvidiousRace().then(result => {
             if (seq !== fetchSeq || currentStreamType !== 'invidious') return;
-            if (result && result.youtube_restricted) {
-                showError('この動画はYouTubeの制限により再生できません（年齢制限・地域制限など）');
-            } else if (result && result.streams && result.streams.length > 0) {
+            if (result && result.streams && result.streams.length > 0) {
                 invidiousStreams = result.streams;
                 currentQualityFilter = 'mp4';
                 updateQualityTabs('mp4');
