@@ -453,22 +453,28 @@
                     streams.push({ url: fmt.url, quality, format: 'mp4', container, hasAudio: true, hasVideo: true, isHLS: false, isLive: false });
                 }
                 for (const fmt of (json.adaptiveFormats || [])) {
-                    if (!fmt.url || !fmt.codec) continue;
-                    const codec = fmt.codec.toLowerCase();
+                    if (!fmt.url) continue;
+                    // codec フィールドが空の場合、type (MIMEタイプ) と encoding から判定
+                    const codecRaw = fmt.codec || fmt.encoding || fmt.type || '';
+                    const mimeType = (fmt.type || '').toLowerCase();
+                    const codec = codecRaw.toLowerCase();
                     const quality = fmt.qualityLabel || fmt.quality || '';
                     const bitrate = fmt.bitrate || '';
                     const container = fmt.container || 'mp4';
-                    if (['vp9','vp8','av1','h264','h265','avc1'].some(v => codec.includes(v))) {
-                        const codecLabel = ['vp9','vp8','av1'].some(v => codec.includes(v)) ? 'WebM' : 'H.264';
+                    const isVideoMime = mimeType.startsWith('video/');
+                    const isAudioMime = mimeType.startsWith('audio/');
+                    if (isVideoMime || ['vp9','vp8','av1','vp09','h264','h265','avc1'].some(v => codec.includes(v))) {
+                        const codecLabel = ['vp9','vp8','av1','vp09'].some(v => codec.includes(v)) ? 'WebM' : 'H.264';
                         const q = (quality.split(' ')[0]) || 'unknown';
                         streams.push({ url: fmt.url, quality: `${q} (${codecLabel})`, format: 'video', container, hasAudio: false, hasVideo: true, isHLS: false, isLive: false });
-                    } else if (['opus','aac','mp4a','vorbis','mp3'].some(a => codec.includes(a))) {
-                        const br = String(bitrate).split('.')[0] || 'unknown';
+                    } else if (isAudioMime || ['opus','aac','mp4a','vorbis','mp3'].some(a => codec.includes(a))) {
+                        const brRaw = parseInt(String(bitrate).split('.')[0]) || 0;
+                        const br = brRaw > 1000 ? Math.round(brRaw / 1000) : brRaw;
                         let label;
                         if (codec.includes('opus')) label = `${br} kbps (Opus)`;
                         else if (codec.includes('aac') || codec.includes('mp4a')) label = `${br} kbps (AAC)`;
                         else if (codec.includes('vorbis')) label = `${br} kbps (Vorbis)`;
-                        else label = `${br} kbps (${fmt.codec})`;
+                        else { const enc = fmt.encoding || 'Audio'; label = `${br} kbps (${enc.toUpperCase()})`; }
                         streams.push({ url: fmt.url, quality: label, format: 'audio', container, hasAudio: true, hasVideo: false, isHLS: false, isLive: false });
                     }
                 }
