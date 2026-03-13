@@ -534,23 +534,39 @@
     let _githubProxies = (() => { try { return JSON.parse(localStorage.getItem(CORS_PROXY_CACHE_KEY) || "[]"); } catch { return []; } })();
     let _githubProxiesFetched = false;
     async function fetchGithubProxies() {
-        if (_githubProxiesFetched) return _githubProxies;
+        if (_githubProxiesFetched) {
+            console.log(`[CORSProxy] Already fetched. Cache has ${_githubProxies.length} proxies.`);
+            return _githubProxies;
+        }
         _githubProxiesFetched = true;
+        console.log(`[CORSProxy] Cache has ${_githubProxies.length} proxies. Fetching GitHub list...`);
         try {
-            const res = await fetch(CORS_PROXY_GITHUB_URL, { signal: AbortSignal.timeout(5000) });
+            const controller = new AbortController();
+            const timer = setTimeout(() => controller.abort(), 5000);
+            const res = await fetch(CORS_PROXY_GITHUB_URL, { signal: controller.signal });
+            clearTimeout(timer);
+            console.log(`[CORSProxy] GitHub response status: ${res.status}`);
             if (res.ok) {
                 const text = await res.text();
                 const proxies = text.split('\n').map(l => l.trim()).filter(l =>
                     l && !l.startsWith('#') && !l.startsWith('//') &&
                     (l.startsWith('http://') || l.startsWith('https://'))
                 ).map(l => l.endsWith('/') ? l : l + '/');
+                console.log(`[CORSProxy] Parsed ${proxies.length} proxies from GitHub`);
                 if (proxies.length > 0) {
                     _githubProxies = proxies;
                     try { localStorage.setItem(CORS_PROXY_CACHE_KEY, JSON.stringify(proxies)); } catch {}
                     console.log(`[CORSProxy] Loaded ${proxies.length} proxies from GitHub`);
+                } else {
+                    console.warn('[CORSProxy] GitHub list was empty or unparseable');
                 }
+            } else {
+                console.error(`[CORSProxy] GitHub fetch HTTP error: ${res.status}`);
             }
-        } catch(e) { console.log('[CORSProxy] GitHub fetch failed:', e); }
+        } catch(e) {
+            console.error(`[CORSProxy] GitHub fetch failed: ${e && e.message ? e.message : e}`);
+        }
+        console.log(`[CORSProxy] fetchGithubProxies done. Total: ${_githubProxies.length} proxies to try.`);
         return _githubProxies;
     }
 
@@ -686,6 +702,11 @@
         // GitHubフォールバック: 動的CORSプロキシリストを取得して再試行
         console.log('[Invidious] Static proxies exhausted, fetching GitHub proxy list...');
         const githubProxies = await fetchGithubProxies();
+        if (githubProxies.length === 0) {
+            console.error('[Invidious] No GitHub proxies available. Giving up.');
+            return null;
+        }
+        console.log(`[Invidious] Trying ${githubProxies.length} GitHub proxies...`);
         for (const proxy of githubProxies) {
             for (let i = 0; i < Math.ceil(all.length / INV_BATCH_SIZE); i++) {
                 const rawBatch = all.slice(i * INV_BATCH_SIZE, (i + 1) * INV_BATCH_SIZE);
