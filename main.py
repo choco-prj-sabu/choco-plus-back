@@ -31,19 +31,40 @@ YOUTUBE_API_KEYS = [
 ]
 
 INVIDIOUS_INSTANCES = [
+    "https://app.materialio.us",
+    "https://inv.kamuridesu.com",
     "https://inv.nadeko.net",
+    "https://inv1.nadeko.net",
+    "https://inv2.nadeko.net",
+    "https://inv3.nadeko.net",
+    "https://invidious.f5.si",
+    "https://invidious.nerdvpn.de",
+    "https://invidious.projectsegfau.lt",
+    "https://invidious.protokolla.fi",
+    "https://invidious.tiekoetter.com",
+    "https://lekker.gay",
+    "https://nyc1.iv.ggtyler.dev",
+    "https://y.com.sb",
     "https://yewtu.be",
-    "https://invidious.privacyredirect.com",
+    "https://yt.thechangebook.org",
+    "https://yt.vern.cc",
+]
+
+INVIDIOUS_STREAM_INSTANCES = [
+    "https://inv.vern.cc",
+    "https://invidious.fdn.fr",
+    "https://iv.ggtyler.dev",
+    "https://invidious.lunar.icu",
+    "https://yt.artemislena.eu",
+    "https://invidious.privacydev.net",
+    "https://invidious.drgns.space",
+    "https://inv.n8pjl.ca",
+    "https://yewtu.be",
+    "https://invidious.nerdvpn.de",
     "https://inv.riverside.rocks",
     "https://invidious.slipfox.xyz",
-    "https://iv.melmac.space",
     "https://invidious.esmailelbob.xyz",
-    "https://invidious.epicsite.xyz",
-    "https://invidious.protokolla.info",
-    "https://inv.vern.cc",
-    "https://yt.artemislena.eu",
-    "https://invidious.flokinet.to",
-    "https://inv.tux.pizza"
+    "https://invidious.projectsegfau.lt",
 ]
 
 def get_proxy_thumbnail(video_id, proxy_type="wsrv.nl"):
@@ -450,43 +471,78 @@ def fetch_stream_from_api(api_url, video_id):
 
 @app.route('/api/invidious-stream/<video_id>')
 def invidious_stream(video_id):
-    """全Invidiousインスタンスに並行リクエストして最速レスポンスの動画フォーマットを返す"""
-    formats = {'mp4': {}, 'video': {}, 'audio': {}, 'hls': {}}
+    """Wista方式: 全ストリーム専用インスタンスに並行レースリクエストして最速レスポンスのストリームを返す"""
+    ERROR_KEYWORDS = ["shutdown", "blocked", "Forbidden", "<!DOCTYPE", "<html", "Rate limit",
+                      "not found", "temporarily unavailable", "maintenance"]
 
     def fetch_from_instance(instance):
         try:
-            response = requests.get(
-                f"{instance}/api/v1/videos/{video_id}",
-                timeout=10
-            )
+            url = f"{instance}/api/v1/videos/{video_id}"
+            response = requests.get(url, timeout=5, headers={"Accept": "application/json"})
             if response.status_code != 200:
                 return None
-            data = response.json()
-            result = {'mp4': {}, 'video': {}, 'audio': {}, 'hls': {}}
 
-            for fmt in data.get('formatStreams', []):
-                quality = fmt.get('qualityLabel', '')
-                url = fmt.get('url', '')
-                codec = fmt.get('codec', '')
-                if url and codec and 'mp4' in codec.lower():
-                    label = quality.split(' ')[0] if quality else 'unknown'
-                    result['mp4'][f"{label} (MP4)"] = url
+            text = response.text
+            if any(kw.lower() in text.lower() for kw in ERROR_KEYWORDS):
+                return None
+
+            data = response.json()
+            if not data.get('title'):
+                return None
+
+            streams = []
 
             if data.get('hlsUrl'):
-                result['hls']['HLS'] = data['hlsUrl']
+                streams.append({
+                    'url': data['hlsUrl'],
+                    'quality': 'Auto (HLS)',
+                    'format': 'hls',
+                    'container': 'm3u8',
+                    'hasAudio': True,
+                    'hasVideo': True,
+                    'isHLS': True,
+                    'isLive': bool(data.get('liveNow')),
+                })
+
+            for fmt in data.get('formatStreams', []):
+                url = fmt.get('url', '')
+                if not url:
+                    continue
+                quality = fmt.get('qualityLabel') or fmt.get('quality') or 'Unknown'
+                container = fmt.get('container', 'mp4')
+                streams.append({
+                    'url': url,
+                    'quality': quality,
+                    'format': 'mp4',
+                    'container': container,
+                    'hasAudio': True,
+                    'hasVideo': True,
+                    'isHLS': False,
+                    'isLive': False,
+                })
 
             for fmt in data.get('adaptiveFormats', []):
                 url = fmt.get('url', '')
                 codec = fmt.get('codec', '')
-                quality = fmt.get('qualityLabel', '')
-                bitrate = fmt.get('bitrate', '')
                 if not url or not codec:
                     continue
                 codec_lower = codec.lower()
+                quality = fmt.get('qualityLabel') or fmt.get('quality') or ''
+                bitrate = fmt.get('bitrate', '')
+                container = fmt.get('container', 'mp4')
                 if any(vc in codec_lower for vc in ['vp9', 'vp8', 'av1', 'h264', 'h265', 'avc1']):
-                    q = quality.split(' ')[0] if quality else 'unknown'
                     codec_label = 'WebM' if any(x in codec_lower for x in ['vp9', 'vp8', 'av1']) else 'H.264'
-                    result['video'][f"{q} ({codec_label})"] = url
+                    q = quality.split(' ')[0] if quality else 'unknown'
+                    streams.append({
+                        'url': url,
+                        'quality': f"{q} ({codec_label})",
+                        'format': 'video',
+                        'container': container,
+                        'hasAudio': False,
+                        'hasVideo': True,
+                        'isHLS': False,
+                        'isLive': False,
+                    })
                 elif any(ac in codec_lower for ac in ['opus', 'aac', 'mp4a', 'vorbis', 'mp3']):
                     br = str(bitrate).split('.')[0] if bitrate else 'unknown'
                     if 'opus' in codec_lower:
@@ -497,29 +553,58 @@ def invidious_stream(video_id):
                         label = f"{br} kbps (Vorbis)"
                     else:
                         label = f"{br} kbps ({codec})"
-                    result['audio'][label] = url
+                    streams.append({
+                        'url': url,
+                        'quality': label,
+                        'format': 'audio',
+                        'container': container,
+                        'hasAudio': True,
+                        'hasVideo': False,
+                        'isHLS': False,
+                        'isLive': False,
+                    })
 
-            if any(result.values()):
-                return result
+            if streams:
+                return {
+                    'streams': streams,
+                    'hlsUrl': data.get('hlsUrl'),
+                    'isLive': bool(data.get('liveNow')),
+                    'title': data.get('title', ''),
+                    'author': data.get('author', ''),
+                    'instance': instance,
+                }
         except Exception as e:
             logger.debug(f"Invidious stream error ({instance}): {e}")
         return None
 
-    instances = INVIDIOUS_INSTANCES.copy()
+    instances = INVIDIOUS_STREAM_INSTANCES.copy()
     random.shuffle(instances)
+
+    result = None
     with ThreadPoolExecutor(max_workers=len(instances)) as executor:
         futures = {executor.submit(fetch_from_instance, inst): inst for inst in instances}
-        for future in as_completed(futures, timeout=10):
-            try:
-                result = future.result(timeout=1)
-                if result and any(result.values()):
-                    formats = result
-                    break
-            except Exception:
-                continue
+        try:
+            for future in as_completed(futures, timeout=8):
+                try:
+                    res = future.result(timeout=1)
+                    if res and res.get('streams'):
+                        result = res
+                        logger.info(f"[Invidious] Success from {res['instance']}")
+                        break
+                except Exception:
+                    continue
+        except TimeoutError:
+            logger.warning("[Invidious] Race timed out after 8s")
 
-    if any(formats.values()):
-        return jsonify({'success': True, 'formats': formats})
+    if result:
+        return jsonify({
+            'success': True,
+            'streams': result['streams'],
+            'hlsUrl': result.get('hlsUrl'),
+            'isLive': result.get('isLive', False),
+            'title': result.get('title', ''),
+            'author': result.get('author', ''),
+        })
     return jsonify({'success': False, 'error': 'ストリームの取得に失敗しました'}), 503
 
 
