@@ -597,7 +597,7 @@
             });
     }
 
-    // ---- Invidious ストリーム（バックエンドとクライアントサイドを同時並行で実行）----
+    // ---- Invidious ストリーム（ブラウザから直接クライアントサイドレース）----
     function loadInvidiousStream() {
         if (invidiousStreams) {
             renderQualityOptions();
@@ -607,48 +607,17 @@
         const seq = ++fetchSeq;
         showLoading('Invidiousストリームを取得中...');
 
-        // バックエンドAPIリクエストをPromiseでラップ
-        const backendPromise = fetch('/api/invidious-stream/' + videoId)
-            .then(async r => {
-                const data = await r.json();
-                if (data.error === 'youtube_restricted') return { youtube_restricted: true };
-                if (data.success && data.streams && data.streams.length > 0) return data;
-                return null;
-            })
-            .catch(() => null);
-
-        // クライアントサイドレースをPromiseでラップ
-        const clientPromise = clientSideInvidiousRace();
-
-        // 両者を並行実行 - 先に成功した方を使用
-        let resolved = false;
-        const applyResult = (result, source) => {
-            if (resolved) return;
-            if (seq !== fetchSeq || currentStreamType !== 'invidious') { resolved = true; return; }
+        clientSideInvidiousRace().then(result => {
+            if (seq !== fetchSeq || currentStreamType !== 'invidious') return;
             if (result && result.youtube_restricted) {
-                resolved = true;
                 showError('この動画はYouTubeの制限により再生できません（年齢制限・地域制限など）');
-                return;
-            }
-            if (result && result.streams && result.streams.length > 0) {
-                resolved = true;
-                console.log(`[Invidious] Got streams from ${source}`);
+            } else if (result && result.streams && result.streams.length > 0) {
                 invidiousStreams = result.streams;
                 currentQualityFilter = 'mp4';
                 updateQualityTabs('mp4');
                 renderQualityOptions();
                 playFirstAvailable();
-            }
-        };
-
-        backendPromise.then(r => applyResult(r, 'backend'));
-        clientPromise.then(r => applyResult(r, 'client'));
-
-        // 両方完了してもまだ resolved でなければエラー
-        Promise.all([backendPromise, clientPromise]).then(() => {
-            if (!resolved) {
-                resolved = true;
-                if (seq !== fetchSeq || currentStreamType !== 'invidious') return;
+            } else {
                 showError('ストリームの取得に失敗しました。再読み込みしてください');
             }
         });
