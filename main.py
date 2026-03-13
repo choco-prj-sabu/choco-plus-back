@@ -485,7 +485,7 @@ def invidious_stream(video_id):
     def fetch_from_instance(instance):
         try:
             url = f"{instance}/api/v1/videos/{video_id}"
-            response = requests.get(url, timeout=5, headers=BROWSER_HEADERS, allow_redirects=True)
+            response = requests.get(url, timeout=3, headers=BROWSER_HEADERS, allow_redirects=True)
             if response.status_code not in (200, 500):
                 return None
 
@@ -621,7 +621,7 @@ def invidious_stream(video_id):
     with ThreadPoolExecutor(max_workers=len(instances)) as executor:
         futures = {executor.submit(fetch_from_instance, inst): inst for inst in instances}
         try:
-            for future in as_completed(futures, timeout=8):
+            for future in as_completed(futures, timeout=5):
                 try:
                     res = future.result(timeout=1)
                     if res:
