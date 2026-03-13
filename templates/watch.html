@@ -125,6 +125,39 @@
         border-color: #ff6b00;
     }
 
+    #btn-inv-log {
+        margin-left: 6px;
+        background: #2a2a2a;
+        color: #aaa;
+        border: 1px solid #555;
+        border-radius: 4px;
+        padding: 6px 12px;
+        font-size: 13px;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+    #btn-inv-log:hover { background: #383838; color: #fff; }
+    #btn-inv-log.log-open { background: #333; color: #fff; border-color: #aaa; }
+
+    #inv-log-overlay {
+        display: none;
+        position: absolute;
+        inset: 0;
+        background: rgba(0,0,0,0.88);
+        z-index: 50;
+        border-radius: 12px;
+        padding: 14px 16px;
+        overflow-y: auto;
+        font-family: monospace;
+        font-size: 12px;
+        line-height: 1.6;
+        color: #ccc;
+    }
+    #inv-log-overlay.visible { display: block; }
+    #inv-log-overlay .log-line { border-bottom: 1px solid #222; padding: 2px 0; word-break: break-all; }
+    #inv-log-overlay .log-warn { color: #f90; }
+    #inv-log-overlay .log-err  { color: #f55; }
+
     .player-container {
         position: relative;
         width: 100%;
@@ -319,12 +352,15 @@
                 <button class="quality-tab" onclick="switchQualityFilter('video')" id="tab-video">映像のみ</button>
                 <button class="quality-tab" onclick="switchQualityFilter('audio')" id="tab-audio">音声のみ</button>
                 <button class="quality-tab" onclick="switchQualityFilter('hls')" id="tab-hls">HLS</button>
+                <button id="btn-inv-log" onclick="toggleInvLog()" style="display:none;">ログ</button>
+                <button class="quality-tab" id="btn-reload-instance" onclick="reloadInvidiousWithDifferentInstance()" style="display:none;margin-left:auto;color:#f90;">別のインスタンスで読み込む</button>
             </div>
             <div class="quality-options" id="qualityOptions"></div>
         </div>
 
         <!-- プレイヤー -->
         <div class="player-wrapper">
+            <div id="inv-log-overlay"></div>
             <div class="player-container" id="playerContainer">
                 <div class="loading-spinner">
                     <div class="spinner"></div>
@@ -380,6 +416,51 @@
     let invidiousStreams = null;
     let ytdlpCachedUrl = null;
     let fetchSeq = 0;
+    let currentInvidiousCombo = null; // { instance, proxy } 最後に成功した組み合わせ
+
+    // ---- コンソールログキャプチャ (Invidious取得中のログ表示用) ----
+    const _invLogs = [];
+    const _origLog  = console.log.bind(console);
+    const _origWarn = console.warn.bind(console);
+    const _origErr  = console.error.bind(console);
+
+    function _captureLog(level, args) {
+        const msg = args.map(a => (typeof a === 'object' ? JSON.stringify(a) : String(a))).join(' ');
+        _invLogs.push({ level, msg, time: new Date().toLocaleTimeString() });
+        _refreshLogOverlay();
+    }
+    console.log   = (...a) => { _origLog(...a);  _captureLog('log',  a); };
+    console.warn  = (...a) => { _origWarn(...a); _captureLog('warn', a); };
+    console.error = (...a) => { _origErr(...a);  _captureLog('err',  a); };
+
+    function _refreshLogOverlay() {
+        const el = document.getElementById('inv-log-overlay');
+        if (!el || !el.classList.contains('visible')) return;
+        el.innerHTML = _invLogs.slice(-200).map(l =>
+            `<div class="log-line log-${l.level}"><span style="color:#555;">[${l.time}]</span> ${escHtml(l.msg)}</div>`
+        ).join('');
+        el.scrollTop = el.scrollHeight;
+    }
+    function escHtml(s) {
+        return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    }
+
+    function toggleInvLog() {
+        const el = document.getElementById('inv-log-overlay');
+        const btn = document.getElementById('btn-inv-log');
+        const visible = el.classList.toggle('visible');
+        btn.classList.toggle('log-open', visible);
+        if (visible) _refreshLogOverlay();
+    }
+
+    function _showLogBtn()  { document.getElementById('btn-inv-log').style.display = 'inline-block'; }
+    function _hideLogArea() {
+        const btn = document.getElementById('btn-inv-log');
+        const el  = document.getElementById('inv-log-overlay');
+        btn.style.display = 'none';
+        btn.classList.remove('log-open');
+        el.classList.remove('visible');
+    }
 
     // ---- Wista方式: クライアントサイドInvidiousフォールバック設定 ----
     const INV_STREAM_INSTANCES = [
@@ -531,7 +612,7 @@
                     const streams = parseInvidiousStreams(json);
                     if (!streams.length) return null;
                     saveWorkingInstance(instance);
-                    return { streams, hlsUrl: json.hlsUrl, isLive: !!json.liveNow, title: json.title, author: json.author, instance };
+                    return { streams, hlsUrl: json.hlsUrl, isLive: !!json.liveNow, title: json.title, author: json.author, instance, proxy };
                 })
                 .catch(() => null);
         });
@@ -547,21 +628,34 @@
     }
 
     // ---- Wista方式メインフェッチ: キャッシュ→静的プロキシバッチ→GitHubプロキシ ----
-    async function clientSideInvidiousRace() {
+    // excludeCombo: { instance, proxy } を指定するとその組み合わせをスキップ（その1回限り）
+    async function clientSideInvidiousRace(excludeCombo) {
+        // 除外コンボが含まれるバッチからはそのインスタンスだけ除去する
+        const filterBatch = (batch, proxy) => {
+            if (!excludeCombo || excludeCombo.proxy !== proxy) return batch;
+            return batch.filter(i => i !== excludeCombo.instance);
+        };
+
         const working = _workingInstances.filter(i => INV_STREAM_INSTANCES.includes(i));
         const rest = INV_STREAM_INSTANCES.filter(i => !working.includes(i));
         const all = [...working, ...rest];
 
         // ファストパス: キャッシュ済みインスタンス × 最初のプロキシ
         if (working.length > 0 && CORS_PROXIES_STATIC.length > 0) {
-            const r = await fetchInvidiousBatch(working, CORS_PROXIES_STATIC[0], INV_REQ_TIMEOUT);
-            if (r) { console.log('[Invidious] Fast path hit:', r.instance); return r; }
+            const proxy = CORS_PROXIES_STATIC[0];
+            const batch = filterBatch(working, proxy);
+            if (batch.length > 0) {
+                const r = await fetchInvidiousBatch(batch, proxy, INV_REQ_TIMEOUT);
+                if (r) { console.log('[Invidious] Fast path hit:', r.instance); return r; }
+            }
         }
 
         // フルサーチ: 全インスタンスをバッチ分割×各静的プロキシ
         for (const proxy of CORS_PROXIES_STATIC) {
             for (let i = 0; i < Math.ceil(all.length / INV_BATCH_SIZE); i++) {
-                const batch = all.slice(i * INV_BATCH_SIZE, (i + 1) * INV_BATCH_SIZE);
+                const rawBatch = all.slice(i * INV_BATCH_SIZE, (i + 1) * INV_BATCH_SIZE);
+                const batch = filterBatch(rawBatch, proxy);
+                if (!batch.length) continue;
                 const r = await fetchInvidiousBatch(batch, proxy, INV_REQ_TIMEOUT);
                 if (r) { console.log(`[Invidious] Hit proxy="${proxy}" instance="${r.instance}"`); return r; }
             }
@@ -572,7 +666,9 @@
         const githubProxies = await fetchGithubProxies();
         for (const proxy of githubProxies) {
             for (let i = 0; i < Math.ceil(all.length / INV_BATCH_SIZE); i++) {
-                const batch = all.slice(i * INV_BATCH_SIZE, (i + 1) * INV_BATCH_SIZE);
+                const rawBatch = all.slice(i * INV_BATCH_SIZE, (i + 1) * INV_BATCH_SIZE);
+                const batch = filterBatch(rawBatch, proxy);
+                if (!batch.length) continue;
                 const r = await fetchInvidiousBatch(batch, proxy, INV_REQ_TIMEOUT);
                 if (r) { console.log(`[Invidious] GitHub proxy hit: ${proxy}`); return r; }
             }
@@ -591,6 +687,10 @@
         document.getElementById('btn-invidious').classList.toggle('active', type === 'invidious');
         document.getElementById('btn-nocookie').classList.toggle('active', type === 'nocookie');
         document.getElementById('qualitySelector').classList.toggle('show', type === 'invidious');
+        if (type !== 'invidious') {
+            document.getElementById('btn-reload-instance').style.display = 'none';
+            _hideLogArea();
+        }
 
         if (type === 'ytdlp') {
             loadYtdlpStream();
@@ -695,17 +795,48 @@
         }
         const seq = ++fetchSeq;
         showLoading('Invidiousストリームを取得中...');
+        _showLogBtn();
 
         clientSideInvidiousRace().then(result => {
             if (seq !== fetchSeq || currentStreamType !== 'invidious') return;
             if (result && result.streams && result.streams.length > 0) {
                 invidiousStreams = result.streams;
+                currentInvidiousCombo = { instance: result.instance, proxy: result.proxy };
                 currentQualityFilter = 'mp4';
                 updateQualityTabs('mp4');
                 renderQualityOptions();
                 playFirstAvailable();
+                _hideLogArea();
+                document.getElementById('btn-reload-instance').style.display = 'inline-block';
             } else {
                 showError('ストリームの取得に失敗しました。再読み込みしてください');
+            }
+        });
+    }
+
+    // ---- 別のインスタンス+プロキシの組み合わせで再取得 ----
+    function reloadInvidiousWithDifferentInstance() {
+        const exclude = currentInvidiousCombo;
+        invidiousStreams = null;
+        currentInvidiousCombo = null;
+        document.getElementById('btn-reload-instance').style.display = 'none';
+        const seq = ++fetchSeq;
+        showLoading('別のインスタンスを検索中...');
+        _showLogBtn();
+
+        clientSideInvidiousRace(exclude).then(result => {
+            if (seq !== fetchSeq || currentStreamType !== 'invidious') return;
+            if (result && result.streams && result.streams.length > 0) {
+                invidiousStreams = result.streams;
+                currentInvidiousCombo = { instance: result.instance, proxy: result.proxy };
+                currentQualityFilter = 'mp4';
+                updateQualityTabs('mp4');
+                renderQualityOptions();
+                playFirstAvailable();
+                _hideLogArea();
+                document.getElementById('btn-reload-instance').style.display = 'inline-block';
+            } else {
+                showError('別のインスタンスが見つかりませんでした。再読み込みしてください');
             }
         });
     }
