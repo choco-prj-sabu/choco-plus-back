@@ -611,10 +611,49 @@
         </iframe>`;
     }
 
+    // ---- メディアリトライ共通ヘルパー ----
+    // rebuildFn() はプレイヤーを再構築して新しい mediaEl を返す関数
+    function attachMediaRetry(initialEl, rebuildFn, savedTime) {
+        let mediaEl = initialEl;
+        let retryCount = 0;
+        const MAX_RETRY = 5;
+
+        const onLoaded = () => {
+            if (savedTime > 0 && isFinite(savedTime)) mediaEl.currentTime = savedTime;
+        };
+        mediaEl.addEventListener('loadedmetadata', onLoaded, { once: true });
+
+        const onError = () => {
+            if (retryCount >= MAX_RETRY) return;
+            retryCount++;
+            console.warn(`再生エラー。リトライ中... (${retryCount}/${MAX_RETRY})`);
+
+            setTimeout(() => {
+                if (!playerContainer.contains(mediaEl)) return;
+
+                mediaEl.removeEventListener('error', onError);
+                mediaEl.removeEventListener('loadedmetadata', onLoaded);
+
+                mediaEl = rebuildFn();
+                if (mediaEl) {
+                    mediaEl.addEventListener('loadedmetadata', onLoaded, { once: true });
+                    mediaEl.addEventListener('error', onError, { once: true });
+                }
+            }, 1500 * retryCount);
+        };
+
+        mediaEl.addEventListener('error', onError, { once: true });
+    }
+
     // ---- ytdlp ストリーム ----
     function loadYtdlpStream() {
         if (ytdlpCachedUrl) {
             playerContainer.innerHTML = `<video controls autoplay><source src="${ytdlpCachedUrl}" type="video/mp4"></video>`;
+            const v = playerContainer.querySelector('video');
+            attachMediaRetry(v, () => {
+                playerContainer.innerHTML = `<video controls autoplay><source src="${ytdlpCachedUrl}" type="video/mp4"></video>`;
+                return playerContainer.querySelector('video');
+            }, 0);
             return;
         }
         const seq = ++fetchSeq;
@@ -626,6 +665,11 @@
                 if (data.stream_url) {
                     ytdlpCachedUrl = data.stream_url;
                     playerContainer.innerHTML = `<video controls autoplay><source src="${ytdlpCachedUrl}" type="video/mp4"></video>`;
+                    const v = playerContainer.querySelector('video');
+                    attachMediaRetry(v, () => {
+                        playerContainer.innerHTML = `<video controls autoplay><source src="${ytdlpCachedUrl}" type="video/mp4"></video>`;
+                        return playerContainer.querySelector('video');
+                    }, 0);
                 } else {
                     showError('ストリームの取得に失敗しました。再読み込みしてください');
                 }
@@ -725,14 +769,42 @@
             btn.classList.toggle('selected', btn.textContent === stream.quality);
         });
 
+        // 現在の再生位置を保存
+        const existingMedia = playerContainer.querySelector('video, audio');
+        const savedTime = (existingMedia && isFinite(existingMedia.currentTime) && existingMedia.currentTime > 0)
+            ? existingMedia.currentTime : 0;
+
+        let mediaEl;
         if (stream.isHLS) {
             playerContainer.innerHTML = `<video controls autoplay><source src="${stream.url}" type="application/x-mpegURL"></video>`;
+            mediaEl = playerContainer.querySelector('video');
         } else if (stream.format === 'audio') {
             const mime = (stream.container === 'webm') ? 'audio/webm' : 'audio/mp4';
             playerContainer.innerHTML = `<audio controls autoplay style="width:100%;margin:auto;display:block;"><source src="${stream.url}" type="${mime}"></audio>`;
+            mediaEl = playerContainer.querySelector('audio');
         } else {
             const mime = stream.container === 'webm' ? 'video/webm' : 'video/mp4';
             playerContainer.innerHTML = `<video controls autoplay><source src="${stream.url}" type="${mime}"></video>`;
+            mediaEl = playerContainer.querySelector('video');
+        }
+
+        // 保存した再生位置にシーク & エラー時リトライ
+        if (mediaEl) {
+            const rebuildFn = () => {
+                if (stream.isHLS) {
+                    playerContainer.innerHTML = `<video controls autoplay><source src="${stream.url}" type="application/x-mpegURL"></video>`;
+                    return playerContainer.querySelector('video');
+                } else if (stream.format === 'audio') {
+                    const mime = (stream.container === 'webm') ? 'audio/webm' : 'audio/mp4';
+                    playerContainer.innerHTML = `<audio controls autoplay style="width:100%;margin:auto;display:block;"><source src="${stream.url}" type="${mime}"></audio>`;
+                    return playerContainer.querySelector('audio');
+                } else {
+                    const mime = stream.container === 'webm' ? 'video/webm' : 'video/mp4';
+                    playerContainer.innerHTML = `<video controls autoplay><source src="${stream.url}" type="${mime}"></video>`;
+                    return playerContainer.querySelector('video');
+                }
+            };
+            attachMediaRetry(mediaEl, rebuildFn, savedTime);
         }
     }
 
